@@ -60,7 +60,7 @@ export class AnyApi implements INodeType {
 					{
 						name: 'List APIs',
 						value: 'list',
-						action: 'List available APIs',
+						action: 'List available data sources',
 						description: 'Browse the AnyAPI catalog',
 					},
 					{
@@ -80,7 +80,7 @@ export class AnyApi implements INodeType {
 				required: true,
 				default: '',
 				description:
-					'The API to call. Choose from the list, or specify a SKU slug using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
 				displayOptions: { show: { operation: ['run', 'getSchema'] } },
 			},
 			{

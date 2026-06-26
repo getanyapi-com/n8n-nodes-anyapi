@@ -60,6 +60,23 @@ The credential is validated against the wallet balance endpoint when you save it
 
 5. Execute. The node returns clean JSON plus the exact `costUsd` of the call.
 
+## Example workflows
+
+**Local lead machine** - type a niche and a city, scrape Google Maps with contact details, and write a personalized opener per business:
+
+1. **Form Trigger** - fields: `Business type`, `Location`.
+2. **AnyAPI** (Run API) - select **Google Maps Contacts** (`maps.contacts`), input:
+
+   ```json
+   { "query": "{{ $json['Business type'] }}", "location": "{{ $json['Location'] }}", "limit": 10 }
+   ```
+
+3. **Split Out** on `output.data.items` to get one item per business.
+4. **AI Agent** - drafts a personalized outreach line from each business.
+5. **Google Sheets** (Append) - log the enriched leads.
+
+**Company 360 brief** - fan out across several AnyAPI endpoints on one key (Google News, Trustpilot, Similarweb, Reddit, LinkedIn), merge them, and have an AI agent write a one-page company brief. Because every source shares the same credential and response envelope (`output` + `costUsd`), adding a sixth source is just another AnyAPI node.
+
 ## Resources
 
 - [AnyAPI documentation](https://getanyapi.com/docs)
