@@ -24,7 +24,10 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm install --no-audit --no-fund
+      # --ignore-scripts skips native addon builds (a transitive isolated-vm dep
+      # of n8n-workflow that fails to compile on the runner). We only need the
+      # TypeScript types and the lint/build toolchain, not that native module.
+      - run: npm install --no-audit --no-fund --ignore-scripts
       - run: npm run lint
       - run: npm run build
       - run: npm publish --provenance --access public
