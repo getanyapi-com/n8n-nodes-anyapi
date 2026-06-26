@@ -14,8 +14,31 @@ import { NodeApiError } from 'n8n-workflow';
 const DEFAULT_BASE_URL = 'https://api.getanyapi.com';
 
 // Credits are AnyAPI's internal accounting unit (1 credit = $0.00001 USD). The
-// public catalog returns a "from" price in credits; the dropdown shows USD.
+// public catalog returns prices in credits; the dropdown shows USD.
 const CREDIT_USD = 0.00001;
+
+// Formats a small USD amount with just enough precision (e.g. $0.0015, $1.20).
+function fmtUsd(n: number): string {
+	return '$' + (n < 1 ? String(parseFloat(n.toFixed(4))) : n.toFixed(2));
+}
+
+// Builds the price suffix shown next to each API in the dropdown. AnyAPI bills
+// per request (baseCredits), per result (perItemCredits), or a mix of both. Many
+// SKUs are a flat per-request charge expressed only as fromCredits (base and
+// per-item both 0), so that is the fallback. The label reflects whichever model
+// applies instead of assuming a flat per-request price. The catalog is the
+// source of truth, so this updates automatically when pricing changes upstream.
+function priceLabel(baseCredits: number, perItemCredits: number, fromCredits: number): string {
+	const base = baseCredits * CREDIT_USD;
+	const perItem = perItemCredits * CREDIT_USD;
+	if (perItemCredits > 0 && baseCredits > 0) {
+		return ` (${fmtUsd(perItem)}/result + ${fmtUsd(base)}/req)`;
+	}
+	if (perItemCredits > 0) return ` (${fmtUsd(perItem)}/result)`;
+	if (baseCredits > 0) return ` (${fmtUsd(base)}/req)`;
+	if (fromCredits > 0) return ` (${fmtUsd(fromCredits * CREDIT_USD)}/req)`;
+	return '';
+}
 
 // Resolves the gateway base URL from the credential, trimming any trailing slash.
 async function baseUrlFor(ctx: IExecuteFunctions | ILoadOptionsFunctions): Promise<string> {
@@ -167,9 +190,10 @@ export class AnyApi implements INodeType {
 				const options = (res.apis ?? []).map((a) => {
 					const slug = String(a.slug ?? '');
 					const name = String(a.name ?? slug);
-					const usd =
-						typeof a.fromCredits === 'number' ? (a.fromCredits as number) * CREDIT_USD : undefined;
-					const price = usd !== undefined ? ` ($${usd.toFixed(4)}/req)` : '';
+					const base = typeof a.baseCredits === 'number' ? (a.baseCredits as number) : 0;
+					const perItem = typeof a.perItemCredits === 'number' ? (a.perItemCredits as number) : 0;
+					const from = typeof a.fromCredits === 'number' ? (a.fromCredits as number) : 0;
+					const price = priceLabel(base, perItem, from);
 					return {
 						name: `${name}${price}`,
 						value: slug,
