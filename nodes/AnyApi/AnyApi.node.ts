@@ -8,6 +8,8 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 	JsonObject,
+	ResourceMapperField,
+	ResourceMapperFields,
 } from 'n8n-workflow';
 import { NodeApiError } from 'n8n-workflow';
 
@@ -38,6 +40,44 @@ function priceLabel(baseCredits: number, perItemCredits: number, fromCredits: nu
 	if (baseCredits > 0) return ` (${fmtUsd(base)}/req)`;
 	if (fromCredits > 0) return ` (${fmtUsd(fromCredits * CREDIT_USD)}/req)`;
 	return '';
+}
+
+// Converts an API input JSON Schema into n8n Resource Mapper fields, so the Run
+// API form renders typed inputs (with required flags and enum dropdowns) instead
+// of a raw JSON blob. Driven entirely by the live schema, so it tracks any SKU.
+function schemaToResourceFields(schema: IDataObject): ResourceMapperField[] {
+	const props = (schema.properties as IDataObject) ?? {};
+	const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+	const fields: ResourceMapperField[] = [];
+
+	for (const [name, raw] of Object.entries(props)) {
+		const p = (raw ?? {}) as IDataObject;
+		const jsonType = String(p.type ?? 'string');
+		let type: ResourceMapperField['type'] = 'string';
+		let options: INodePropertyOptions[] | undefined;
+
+		if (Array.isArray(p.enum)) {
+			type = 'options';
+			options = (p.enum as unknown[]).map((v) => ({ name: String(v), value: String(v) }));
+		} else if (jsonType === 'integer' || jsonType === 'number') {
+			type = 'number';
+		} else if (jsonType === 'boolean') {
+			type = 'boolean';
+		}
+		// Arrays and objects fall through to a string field; enter them as JSON.
+
+		fields.push({
+			id: name,
+			displayName: name,
+			required: required.includes(name),
+			defaultMatch: false,
+			display: true,
+			type,
+			...(options ? { options } : {}),
+		});
+	}
+
+	return fields;
 }
 
 // Resolves the gateway base URL from the credential, trimming any trailing slash.
@@ -107,12 +147,52 @@ export class AnyApi implements INodeType {
 				displayOptions: { show: { operation: ['run', 'getSchema'] } },
 			},
 			{
+				displayName: 'Input Mode',
+				name: 'inputMode',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Fields (From Schema)',
+						value: 'fields',
+						description: 'Fill typed fields loaded from the selected API schema',
+					},
+					{
+						name: 'JSON',
+						value: 'json',
+						description: 'Provide the raw JSON payload (supports expressions)',
+					},
+				],
+				default: 'fields',
+				displayOptions: { show: { operation: ['run'] } },
+			},
+			{
 				displayName: 'Input',
+				name: 'inputFields',
+				type: 'resourceMapper',
+				noDataExpression: true,
+				default: { mappingMode: 'defineBelow', value: null },
+				required: true,
+				typeOptions: {
+					loadOptionsDependsOn: ['sku'],
+					resourceMapper: {
+						resourceMapperMethod: 'getApiInputSchema',
+						mode: 'add',
+						fieldWords: { singular: 'input field', plural: 'input fields' },
+						addAllFields: true,
+						multiKeyMatch: false,
+						supportAutoMap: true,
+					},
+				},
+				displayOptions: { show: { operation: ['run'], inputMode: ['fields'] } },
+			},
+			{
+				displayName: 'Input (JSON)',
 				name: 'input',
 				type: 'json',
 				default: '{}',
 				description: 'Normalized input payload matching the API input schema',
-				displayOptions: { show: { operation: ['run'] } },
+				displayOptions: { show: { operation: ['run'], inputMode: ['json'] } },
 			},
 			{
 				displayName: 'Options',
@@ -205,6 +285,24 @@ export class AnyApi implements INodeType {
 				return options;
 			},
 		},
+		resourceMapping: {
+			// Loads the selected SKU's input schema and exposes its properties as
+			// typed Resource Mapper fields. Re-runs whenever the chosen API changes.
+			async getApiInputSchema(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const sku = (this.getCurrentNodeParameter('sku') as string) || '';
+				if (!sku) return { fields: [] };
+
+				const baseUrl = await baseUrlFor(this);
+				const res = (await this.helpers.httpRequestWithAuthentication.call(this, 'anyApiApi', {
+					method: 'GET',
+					url: `${baseUrl}/v1/apis/${encodeURIComponent(sku)}`,
+					json: true,
+				})) as IDataObject;
+
+				const inputSchema = (res.inputSchema as IDataObject) ?? {};
+				return { fields: schemaToResourceFields(inputSchema) };
+			},
+		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
@@ -219,12 +317,23 @@ export class AnyApi implements INodeType {
 
 				if (operation === 'run') {
 					const sku = this.getNodeParameter('sku', i) as string;
-					const rawInput = this.getNodeParameter('input', i, {}) as IDataObject | string;
-					let body: IDataObject;
-					if (typeof rawInput === 'string') {
-						body = rawInput.trim() === '' ? {} : (JSON.parse(rawInput) as IDataObject);
+					const inputMode = this.getNodeParameter('inputMode', i, 'fields') as string;
+					let body: IDataObject = {};
+
+					if (inputMode === 'json') {
+						const rawInput = this.getNodeParameter('input', i, {}) as IDataObject | string;
+						if (typeof rawInput === 'string') {
+							body = rawInput.trim() === '' ? {} : (JSON.parse(rawInput) as IDataObject);
+						} else {
+							body = rawInput ?? {};
+						}
 					} else {
-						body = rawInput ?? {};
+						const mapped = this.getNodeParameter('inputFields.value', i, {}) as IDataObject | null;
+						for (const [k, v] of Object.entries(mapped ?? {})) {
+							// Skip blanks so optional fields are omitted, not sent empty.
+							if (v === undefined || v === null || v === '') continue;
+							body[k] = v;
+						}
 					}
 
 					const options = this.getNodeParameter('options', i, {}) as IDataObject;

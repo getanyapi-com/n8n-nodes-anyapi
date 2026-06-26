@@ -22,7 +22,7 @@ n8n-nodes-anyapi
 
 The node exposes one **AnyAPI** node with four operations:
 
-- **Run API** - execute any API by SKU with a normalized input payload. Returns `output`, `provider`, `costUsd`, and `items`.
+- **Run API** - execute any API by SKU. Inputs render as typed fields loaded from the API schema (or raw JSON if you prefer). Returns `output`, `provider`, `costUsd`, and `items`.
 - **Get API Schema** - fetch the input and output JSON Schema for one API.
 - **List APIs** - browse the AnyAPI catalog, optionally filtered by query and category.
 - **Get Balance** - return the remaining wallet balance in USD.
@@ -51,12 +51,14 @@ The credential is validated against the wallet balance endpoint when you save it
 
 1. Add the **AnyAPI** node to your workflow.
 2. Select **Run API**.
-3. Pick an API from the dropdown, for example **Google Search** or **Reddit Search**.
-4. Fill the **Input** field with the normalized payload, for example:
+3. Pick an API from the dropdown, for example **Google Search** or **Reddit Search**. Each option shows its live price (per request, per result, or both).
+4. Provide the input. There are two **Input Mode** choices:
+   - **Fields (from schema)** - the default. The node loads the selected API's input schema and renders typed fields, with required fields flagged and enum fields shown as dropdowns. No JSON to hand write.
+   - **JSON** - provide the raw payload, useful for expressions, for example:
 
-   ```json
-   { "query": "apify alternative" }
-   ```
+     ```json
+     { "query": "apify alternative" }
+     ```
 
 5. Execute. The node returns clean JSON plus the exact `costUsd` of the call.
 

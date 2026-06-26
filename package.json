@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-anyapi",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "n8n community node for AnyAPI: run any scraping or data API through one key, billed per request in USD, no subscription.",
   "keywords": [
     "n8n-community-node-package",
