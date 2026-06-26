@@ -97,6 +97,10 @@ export class AnyApi implements INodeType {
 		subtitle:
 			'={{ $parameter["operation"] + ($parameter["sku"] ? ": " + $parameter["sku"] : "") }}',
 		description: 'Run any scraping or data API through AnyAPI, billed per request in USD',
+		// Lets the node be attached to an AI Agent as a tool, so the model can call
+		// any AnyAPI endpoint itself. Required since n8n 2.x exposes a node as a tool
+		// only when it opts in here (the old community tool-usage env var is gone).
+		usableAsTool: true,
 		defaults: { name: 'AnyAPI' },
 		inputs: ['main'],
 		outputs: ['main'],
