@@ -42,6 +42,49 @@ function priceLabel(baseCredits: number, perItemCredits: number, fromCredits: nu
 	return '';
 }
 
+// Credit fields are AnyAPI's internal accounting unit and must never reach the
+// customer-facing output. The catalog / API objects the gateway returns carry
+// raw credit prices (priceCredits/fromCredits/baseCredits/perItemCredits and a
+// nested credit `quotes` array); this strips them and appends a USD `pricing`
+// block instead, so every price the workflow sees is in dollars.
+const CREDIT_KEYS = ['priceCredits', 'fromCredits', 'baseCredits', 'perItemCredits', 'quotes'];
+
+// Rounds a credit amount to USD, trimming float noise (150 credits => 0.0015).
+function usd6(credits: number): number {
+	return parseFloat((credits * CREDIT_USD).toFixed(6));
+}
+
+// Returns a copy of an API/catalog object with credit fields removed and a USD
+// `pricing` block added. Built by key-copy (not destructuring) to keep the lint
+// rules happy and to preserve every non-credit field (name, schemas, perItemUnit).
+function toUsdPricing(api: IDataObject): IDataObject {
+	const ceiling =
+		typeof api.priceCredits === 'number'
+			? (api.priceCredits as number)
+			: typeof api.fromCredits === 'number'
+				? (api.fromCredits as number)
+				: 0;
+	const baseC = typeof api.baseCredits === 'number' ? (api.baseCredits as number) : 0;
+	const perItemC = typeof api.perItemCredits === 'number' ? (api.perItemCredits as number) : 0;
+
+	const out: IDataObject = {};
+	for (const [k, v] of Object.entries(api)) {
+		if (!CREDIT_KEYS.includes(k)) out[k] = v;
+	}
+
+	const pricing: IDataObject = {
+		model: perItemC > 0 ? 'per_item' : 'per_request',
+		perRequestUsd: usd6(ceiling),
+		per1kRequestsUsd: parseFloat((ceiling * CREDIT_USD * 1000).toFixed(4)),
+	};
+	if (perItemC > 0) {
+		pricing.perItemUsd = usd6(perItemC);
+		pricing.baseUsd = usd6(baseC);
+	}
+	out.pricing = pricing;
+	return out;
+}
+
 // Converts an API input JSON Schema into n8n Resource Mapper fields, so the Run
 // API form renders typed inputs (with required flags and enum dropdowns) instead
 // of a raw JSON blob. Driven entirely by the live schema, so it tracks any SKU.
@@ -359,7 +402,7 @@ export class AnyApi implements INodeType {
 					)) as IDataObject;
 				} else if (operation === 'getSchema') {
 					const sku = this.getNodeParameter('sku', i) as string;
-					responseData = (await this.helpers.httpRequestWithAuthentication.call(
+					const api = (await this.helpers.httpRequestWithAuthentication.call(
 						this,
 						'anyApiApi',
 						{
@@ -368,6 +411,7 @@ export class AnyApi implements INodeType {
 							json: true,
 						},
 					)) as IDataObject;
+					responseData = toUsdPricing(api);
 				} else if (operation === 'list') {
 					const filters = this.getNodeParameter('filters', i, {}) as IDataObject;
 					const qs: IDataObject = {};
@@ -380,7 +424,7 @@ export class AnyApi implements INodeType {
 						qs,
 						json: true,
 					})) as { apis?: IDataObject[] };
-					responseData = res.apis ?? [];
+					responseData = (res.apis ?? []).map(toUsdPricing);
 				} else {
 					responseData = (await this.helpers.httpRequestWithAuthentication.call(
 						this,
