@@ -1,0 +1,303 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+
+const { AnyApi } = require('../dist/nodes/AnyApi/AnyApi.node.js');
+
+const flatOffer = { model: 'flat', unit: 'request', maxUsd: 0.00325 };
+const linearOffer = {
+	model: 'linear',
+	unit: 'result',
+	baseUsd: 0.00005,
+	perUnitUsd: 0.0008,
+	maxUsd: 0.04002,
+};
+
+function apiFixture(overrides = {}) {
+	return {
+		id: 'api-1',
+		slug: 'search.web',
+		category: 'search',
+		name: 'Web Search',
+		description: 'Search the public web.',
+		provider: 'AnyAPI',
+		pricing: { from: linearOffer, failoverMaxUsd: 0.04002 },
+		lanes: [
+			{
+				pricing: linearOffer,
+				health: { window: '30d', uptimePct: 99.8, latencyP50Ms: 420, requests: 810 },
+			},
+		],
+		heavy: false,
+		tryEligible: true,
+		...overrides,
+	};
+}
+
+function detailFixture(overrides = {}) {
+	return apiFixture({
+		inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+		outputSchema: { type: 'object', properties: { results: { type: 'array' } } },
+		...overrides,
+	});
+}
+
+function fakeContext(parameters, response, { continueOnFail = false } = {}) {
+	const requests = [];
+	const ctx = {
+		continueOnFail: () => continueOnFail,
+		getCredentials: async () => ({ baseUrl: 'https://api.example.test/' }),
+		getInputData: () => [{ json: {} }],
+		getNode: () => ({ name: 'AnyAPI', type: 'anyApi' }),
+		getNodeParameter(name, _index, fallback) {
+			return Object.hasOwn(parameters, name) ? parameters[name] : fallback;
+		},
+		helpers: {
+			async httpRequest(request) {
+				requests.push(request);
+				return typeof response === 'function' ? response(request) : response;
+			},
+			async httpRequestWithAuthentication(_credential, request) {
+				requests.push(request);
+				return typeof response === 'function' ? response(request) : response;
+			},
+		},
+	};
+	return { ctx, requests };
+}
+
+async function execute(parameters, response, options) {
+	const node = new AnyApi();
+	const { ctx, requests } = fakeContext(parameters, response, options);
+	const output = await node.execute.call(ctx);
+	return { output, requests };
+}
+
+function assertCustomerSafe(value) {
+	if (Array.isArray(value)) {
+		for (const item of value) assertCustomerSafe(item);
+		return;
+	}
+	if (value === null || typeof value !== 'object') return;
+	for (const [key, nested] of Object.entries(value)) {
+		assert.doesNotMatch(key, /credit/i);
+		if (key === 'provider') assert.equal(nested, 'AnyAPI');
+		assertCustomerSafe(nested);
+	}
+}
+
+test('List APIs browses by category and preserves nested USD discovery facts', async () => {
+	const api = apiFixture();
+	const { output, requests } = await execute(
+		{ operation: 'list', filters: { category: 'search' } },
+		{ apis: [api] },
+	);
+
+	assert.deepEqual(requests, [
+		{
+			method: 'GET',
+			url: 'https://api.example.test/v1/apis',
+			qs: { category: 'search' },
+			json: true,
+		},
+	]);
+	assert.deepEqual(output[0][0].json, api);
+	assertCustomerSafe(output);
+});
+
+test('Search APIs owns ranked queries and returns the search envelope', async () => {
+	const search = {
+		results: [
+			{
+				slug: 'search.web',
+				platformId: 'search',
+				name: 'Web Search',
+				description: 'Search the public web.',
+				category: 'search',
+				provider: 'AnyAPI',
+				pricing: { from: flatOffer, failoverMaxUsd: 0.004 },
+				relevance: 0.93,
+			},
+		],
+		total: 1,
+		ranking: 'semantic',
+	};
+	const { output, requests } = await execute(
+		{
+			operation: 'search',
+			query: 'web results',
+			searchFilters: { category: 'search', platform: 'search', limit: 12 },
+		},
+		search,
+	);
+
+	assert.deepEqual(requests, [
+		{
+			method: 'GET',
+			url: 'https://api.example.test/catalog/search',
+			qs: { q: 'web results', category: 'search', platform: 'search', limit: 12 },
+			json: true,
+		},
+	]);
+	assert.deepEqual(output[0][0].json, search);
+	assertCustomerSafe(output);
+});
+
+test('Get API Schema returns detail schemas with canonical pricing unchanged', async () => {
+	const api = detailFixture();
+	const { output, requests } = await execute({ operation: 'getSchema', sku: api.slug }, api);
+
+	assert.equal(requests[0].url, 'https://api.example.test/v1/apis/search.web');
+	assert.deepEqual(output[0][0].json, api);
+	assertCustomerSafe(output);
+});
+
+test('Get API Schema rejects detail without an output schema object', async () => {
+	const malformed = apiFixture({ inputSchema: { type: 'object' } });
+	const { output } = await execute(
+		{ operation: 'getSchema', sku: malformed.slug },
+		malformed,
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /detail\.outputSchema.*expected an object/i);
+});
+
+test('Get API Schema rejects detail schemas with the wrong JSON type', async () => {
+	const malformed = detailFixture({ outputSchema: [] });
+	const { output } = await execute(
+		{ operation: 'getSchema', sku: malformed.slug },
+		malformed,
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /detail\.outputSchema.*expected an object/i);
+});
+
+test('Input resource mapping rejects detail without an input schema instead of using empty fields', async () => {
+	const malformed = apiFixture({ outputSchema: { type: 'object' } });
+	const node = new AnyApi();
+	const { ctx } = fakeContext({}, malformed);
+	ctx.getCurrentNodeParameter = () => malformed.slug;
+
+	await assert.rejects(
+		() => node.methods.resourceMapping.getApiInputSchema.call(ctx),
+		/detail\.inputSchema.*expected an object/i,
+	);
+});
+
+test('Discovery operations reject legacy credit and upstream-provider payloads', async () => {
+	const legacy = {
+		slug: 'search.web',
+		provider: 'upstream-provider',
+		fromCredits: 325,
+		inputSchema: { type: 'object' },
+	};
+	const { output } = await execute(
+		{ operation: 'getSchema', sku: 'search.web' },
+		legacy,
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /customer-safe discovery contract/i);
+});
+
+test('Discovery detail rejects pricing.from that disagrees with the first anonymous lane', async () => {
+	const inconsistent = detailFixture({ pricing: { from: flatOffer, failoverMaxUsd: 0.05 } });
+	const { output } = await execute(
+		{ operation: 'getSchema', sku: 'search.web' },
+		inconsistent,
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /pricing\.from.*first anonymous lane/i);
+});
+
+test('Browse rejects failoverMaxUsd below a later redundant flat lane maximum', async () => {
+	const redundantFlat = { model: 'flat', unit: 'request', maxUsd: 0.06 };
+	const inconsistent = apiFixture({
+		pricing: { from: linearOffer, failoverMaxUsd: linearOffer.maxUsd },
+		lanes: [{ pricing: linearOffer }, { pricing: redundantFlat }],
+	});
+	const { output } = await execute(
+		{ operation: 'list', filters: {} },
+		{ apis: [inconsistent] },
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /failoverMaxUsd.*greatest.*lane/i);
+});
+
+test('Browse permits omitted schemas but rejects malformed optional schemas', async () => {
+	const malformed = apiFixture({ inputSchema: [] });
+	const { output } = await execute(
+		{ operation: 'list', filters: {} },
+		{ apis: [malformed] },
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /browse\.apis\[0\]\.inputSchema.*expected an object/i);
+});
+
+test('Detail rejects failoverMaxUsd above every anonymous lane maximum', async () => {
+	const inconsistent = detailFixture({
+		pricing: { from: linearOffer, failoverMaxUsd: 0.05 },
+	});
+	const { output } = await execute(
+		{ operation: 'getSchema', sku: inconsistent.slug },
+		inconsistent,
+		{ continueOnFail: true },
+	);
+
+	assert.match(output[0][0].json.error, /failoverMaxUsd.*greatest.*lane/i);
+});
+
+test('API dropdown formats complete flat and linear USD offers', async () => {
+	const response = {
+		apis: [
+			apiFixture({
+				slug: 'flat.api',
+				name: 'Flat API',
+				pricing: { from: flatOffer, failoverMaxUsd: flatOffer.maxUsd },
+				lanes: [{ pricing: flatOffer }],
+			}),
+			apiFixture({ slug: 'linear.api', name: 'Linear API' }),
+		],
+	};
+	const node = new AnyApi();
+	const { ctx } = fakeContext({}, response);
+	const options = await node.methods.loadOptions.getSkus.call(ctx);
+
+	assert.deepEqual(
+		options.map(({ name, value }) => ({ name, value })),
+		[
+			{ name: 'Flat API ($0.00325/request)', value: 'flat.api' },
+			{
+				name: 'Linear API ($0.00005/request + $0.0008/result, max $0.04002)',
+				value: 'linear.api',
+			},
+		],
+	);
+});
+
+test('API dropdown rejects a mixed flat and linear lane failover mismatch', async () => {
+	const inconsistent = apiFixture({
+		pricing: { from: flatOffer, failoverMaxUsd: flatOffer.maxUsd },
+		lanes: [{ pricing: flatOffer }, { pricing: linearOffer }],
+	});
+	const node = new AnyApi();
+	const { ctx } = fakeContext({}, { apis: [inconsistent] });
+
+	await assert.rejects(
+		() => node.methods.loadOptions.getSkus.call(ctx),
+		/failoverMaxUsd.*greatest.*lane/i,
+	);
+});
+
+test('Node UI keeps browse category-only and exposes a dedicated search operation', () => {
+	const node = new AnyApi();
+	const operations = node.description.properties.find(({ name }) => name === 'operation');
+	const listFilters = node.description.properties.find(({ name }) => name === 'filters');
+
+	assert.ok(operations.options.some(({ value }) => value === 'search'));
+	assert.deepEqual(listFilters.options.map(({ name }) => name), ['category']);
+});

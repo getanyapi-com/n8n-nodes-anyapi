@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-anyapi",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "n8n community node for AnyAPI: run any scraping or data API through one key, billed per request in USD, no subscription.",
   "keywords": [
     "n8n-community-node-package",
@@ -27,10 +27,12 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc && gulp build:icons",
+    "check": "npm run lint && npm test",
     "dev": "tsc --watch",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint --ext .ts,.json nodes credentials package.json",
     "lintfix": "ESLINT_USE_FLAT_CONFIG=false eslint --ext .ts,.json nodes credentials package.json --fix",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && node --test tests/*.test.cjs"
   },
   "files": [
     "dist"
