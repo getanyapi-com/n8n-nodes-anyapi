@@ -20,14 +20,15 @@ n8n-nodes-anyapi
 
 ## Operations
 
-The node exposes one **AnyAPI** node with four operations:
+The node exposes one **AnyAPI** node with five operations:
 
 - **Run API** - execute any API by SKU. Inputs render as typed fields loaded from the API schema (or raw JSON if you prefer). Returns `output`, `provider`, `costUsd`, and `items`.
 - **Get API Schema** - fetch the input and output JSON Schema for one API.
-- **List APIs** - browse the AnyAPI catalog, optionally filtered by query and category.
+- **List APIs** - browse the AnyAPI catalog, optionally filtered by category.
+- **Search APIs** - run a ranked catalog query, optionally scoped by category or platform.
 - **Get Balance** - return the remaining wallet balance in USD.
 
-The **API** dropdown loads live from the AnyAPI catalog, so every available SKU is selectable and newly added providers appear automatically.
+The **API** dropdown loads live from the AnyAPI catalog, so every available SKU is selectable and newly added APIs appear automatically. Discovery operations return the gateway's customer-safe nested USD pricing without exposing internal accounting fields or upstream identities.
 
 ### Response budget options (Run API)
 
@@ -45,7 +46,7 @@ You need an AnyAPI key.
 2. Copy your API key.
 3. In n8n, create new **AnyAPI API** credentials and paste the key.
 
-The credential is validated against the wallet balance endpoint when you save it. New accounts start with a small free credit, so you can test before topping up.
+The credential is validated against the wallet balance endpoint when you save it. New accounts start with a small trial balance, so you can test before topping up.
 
 ## Usage
 

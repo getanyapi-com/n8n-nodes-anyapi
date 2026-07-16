@@ -13,77 +13,9 @@ import type {
 } from 'n8n-workflow';
 import { NodeApiError } from 'n8n-workflow';
 
+import { customerSafeDiscovery } from './discovery';
+
 const DEFAULT_BASE_URL = 'https://api.getanyapi.com';
-
-// Credits are AnyAPI's internal accounting unit (1 credit = $0.00001 USD). The
-// public catalog returns prices in credits; the dropdown shows USD.
-const CREDIT_USD = 0.00001;
-
-// Formats a small USD amount with just enough precision (e.g. $0.0015, $1.20).
-function fmtUsd(n: number): string {
-	return '$' + (n < 1 ? String(parseFloat(n.toFixed(4))) : n.toFixed(2));
-}
-
-// Builds the price suffix shown next to each API in the dropdown. AnyAPI bills
-// per request (baseCredits), per result (perItemCredits), or a mix of both. Many
-// SKUs are a flat per-request charge expressed only as fromCredits (base and
-// per-item both 0), so that is the fallback. The label reflects whichever model
-// applies instead of assuming a flat per-request price. The catalog is the
-// source of truth, so this updates automatically when pricing changes upstream.
-function priceLabel(baseCredits: number, perItemCredits: number, fromCredits: number): string {
-	const base = baseCredits * CREDIT_USD;
-	const perItem = perItemCredits * CREDIT_USD;
-	if (perItemCredits > 0 && baseCredits > 0) {
-		return ` (${fmtUsd(perItem)}/result + ${fmtUsd(base)}/req)`;
-	}
-	if (perItemCredits > 0) return ` (${fmtUsd(perItem)}/result)`;
-	if (baseCredits > 0) return ` (${fmtUsd(base)}/req)`;
-	if (fromCredits > 0) return ` (${fmtUsd(fromCredits * CREDIT_USD)}/req)`;
-	return '';
-}
-
-// Credit fields are AnyAPI's internal accounting unit and must never reach the
-// customer-facing output. The catalog / API objects the gateway returns carry
-// raw credit prices (priceCredits/fromCredits/baseCredits/perItemCredits and a
-// nested credit `quotes` array); this strips them and appends a USD `pricing`
-// block instead, so every price the workflow sees is in dollars.
-const CREDIT_KEYS = ['priceCredits', 'fromCredits', 'baseCredits', 'perItemCredits', 'quotes'];
-
-// Rounds a credit amount to USD, trimming float noise (150 credits => 0.0015).
-function usd6(credits: number): number {
-	return parseFloat((credits * CREDIT_USD).toFixed(6));
-}
-
-// Returns a copy of an API/catalog object with credit fields removed and a USD
-// `pricing` block added. Built by key-copy (not destructuring) to keep the lint
-// rules happy and to preserve every non-credit field (name, schemas, perItemUnit).
-function toUsdPricing(api: IDataObject): IDataObject {
-	const ceiling =
-		typeof api.priceCredits === 'number'
-			? (api.priceCredits as number)
-			: typeof api.fromCredits === 'number'
-				? (api.fromCredits as number)
-				: 0;
-	const baseC = typeof api.baseCredits === 'number' ? (api.baseCredits as number) : 0;
-	const perItemC = typeof api.perItemCredits === 'number' ? (api.perItemCredits as number) : 0;
-
-	const out: IDataObject = {};
-	for (const [k, v] of Object.entries(api)) {
-		if (!CREDIT_KEYS.includes(k)) out[k] = v;
-	}
-
-	const pricing: IDataObject = {
-		model: perItemC > 0 ? 'per_item' : 'per_request',
-		perRequestUsd: usd6(ceiling),
-		per1kRequestsUsd: parseFloat((ceiling * CREDIT_USD * 1000).toFixed(4)),
-	};
-	if (perItemC > 0) {
-		pricing.perItemUsd = usd6(perItemC);
-		pricing.baseUsd = usd6(baseC);
-	}
-	out.pricing = pricing;
-	return out;
-}
 
 // Converts an API input JSON Schema into n8n Resource Mapper fields, so the Run
 // API form renders typed inputs (with required flags and enum dropdowns) instead
@@ -156,16 +88,16 @@ export class AnyApi implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Run API',
-						value: 'run',
-						action: 'Run an API',
-						description: 'Execute an API by SKU with a normalized input payload',
-					},
-					{
 						name: 'Get API Schema',
 						value: 'getSchema',
 						action: 'Get an API schema',
 						description: 'Fetch the input and output schema for one API',
+					},
+					{
+						name: 'Get Balance',
+						value: 'getBalance',
+						action: 'Get wallet balance',
+						description: 'Return the remaining wallet balance in USD',
 					},
 					{
 						name: 'List APIs',
@@ -174,10 +106,16 @@ export class AnyApi implements INodeType {
 						description: 'Browse the AnyAPI catalog',
 					},
 					{
-						name: 'Get Balance',
-						value: 'getBalance',
-						action: 'Get wallet balance',
-						description: 'Return the remaining wallet balance in USD',
+						name: 'Run API',
+						value: 'run',
+						action: 'Run an API',
+						description: 'Execute an API by SKU with a normalized input payload',
+					},
+					{
+						name: 'Search APIs',
+						value: 'search',
+						action: 'Search available data sources',
+						description: 'Run a ranked search over the AnyAPI catalog',
 					},
 				],
 				default: 'run',
@@ -284,18 +222,52 @@ export class AnyApi implements INodeType {
 				displayOptions: { show: { operation: ['list'] } },
 				options: [
 					{
-						displayName: 'Query',
-						name: 'query',
-						type: 'string',
-						default: '',
-						description: 'Free-text filter over API name and description',
-					},
-					{
 						displayName: 'Category',
 						name: 'category',
 						type: 'string',
 						default: '',
 						description: 'Category slug to filter by',
+					},
+				],
+			},
+			{
+				displayName: 'Query',
+				name: 'query',
+				type: 'string',
+				default: '',
+				required: true,
+				description: 'Words or intent to rank against API names and descriptions',
+				displayOptions: { show: { operation: ['search'] } },
+			},
+			{
+				displayName: 'Search Filters',
+				name: 'searchFilters',
+				type: 'collection',
+				placeholder: 'Add Filter',
+				default: {},
+				displayOptions: { show: { operation: ['search'] } },
+				options: [
+					{
+						displayName: 'Category',
+						name: 'category',
+						type: 'string',
+						default: '',
+						description: 'Category slug to scope before ranking',
+					},
+					{
+						displayName: 'Limit',
+						name: 'limit',
+						type: 'number',
+						typeOptions: { minValue: 1 },
+						default: 50,
+						description: 'Max number of results to return',
+					},
+					{
+						displayName: 'Platform',
+						name: 'platform',
+						type: 'string',
+						default: '',
+						description: 'Platform slug to scope before ranking',
 					},
 				],
 			},
@@ -308,19 +280,13 @@ export class AnyApi implements INodeType {
 			// appear without republishing the node. No auth needed: /catalog is public.
 			async getSkus(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const baseUrl = await baseUrlFor(this);
-				const res = (await this.helpers.httpRequest({
-					method: 'GET',
-					url: `${baseUrl}/catalog`,
-					json: true,
-				})) as { apis?: IDataObject[] };
+				const discovery = customerSafeDiscovery.catalog(baseUrl);
+				const apis = discovery.read(await this.helpers.httpRequest(discovery.request));
 
-				const options = (res.apis ?? []).map((a) => {
+				const options = apis.map((a) => {
 					const slug = String(a.slug ?? '');
 					const name = String(a.name ?? slug);
-					const base = typeof a.baseCredits === 'number' ? (a.baseCredits as number) : 0;
-					const perItem = typeof a.perItemCredits === 'number' ? (a.perItemCredits as number) : 0;
-					const from = typeof a.fromCredits === 'number' ? (a.fromCredits as number) : 0;
-					const price = priceLabel(base, perItem, from);
+					const price = customerSafeDiscovery.priceLabel(a.pricing);
 					return {
 						name: `${name}${price}`,
 						value: slug,
@@ -340,13 +306,16 @@ export class AnyApi implements INodeType {
 				if (!sku) return { fields: [] };
 
 				const baseUrl = await baseUrlFor(this);
-				const res = (await this.helpers.httpRequestWithAuthentication.call(this, 'anyApiApi', {
-					method: 'GET',
-					url: `${baseUrl}/v1/apis/${encodeURIComponent(sku)}`,
-					json: true,
-				})) as IDataObject;
+				const discovery = customerSafeDiscovery.detail(baseUrl, sku);
+				const api = discovery.read(
+					await this.helpers.httpRequestWithAuthentication.call(
+						this,
+						'anyApiApi',
+						discovery.request,
+					),
+				);
 
-				const inputSchema = (res.inputSchema as IDataObject) ?? {};
+				const inputSchema = api.inputSchema as IDataObject;
 				return { fields: schemaToResourceFields(inputSchema) };
 			},
 		},
@@ -402,29 +371,36 @@ export class AnyApi implements INodeType {
 					)) as IDataObject;
 				} else if (operation === 'getSchema') {
 					const sku = this.getNodeParameter('sku', i) as string;
-					const api = (await this.helpers.httpRequestWithAuthentication.call(
-						this,
-						'anyApiApi',
-						{
-							method: 'GET' as IHttpRequestMethods,
-							url: `${baseUrl}/v1/apis/${encodeURIComponent(sku)}`,
-							json: true,
-						},
-					)) as IDataObject;
-					responseData = toUsdPricing(api);
+					const discovery = customerSafeDiscovery.detail(baseUrl, sku);
+					const api = discovery.read(
+						await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'anyApiApi',
+							discovery.request,
+						),
+					);
+					responseData = api;
 				} else if (operation === 'list') {
 					const filters = this.getNodeParameter('filters', i, {}) as IDataObject;
-					const qs: IDataObject = {};
-					if (filters.query) qs.query = filters.query;
-					if (filters.category) qs.category = filters.category;
-
-					const res = (await this.helpers.httpRequestWithAuthentication.call(this, 'anyApiApi', {
-						method: 'GET' as IHttpRequestMethods,
-						url: `${baseUrl}/v1/apis`,
-						qs,
-						json: true,
-					})) as { apis?: IDataObject[] };
-					responseData = (res.apis ?? []).map(toUsdPricing);
+					const discovery = customerSafeDiscovery.browse(baseUrl, filters.category);
+					responseData = discovery.read(
+						await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'anyApiApi',
+							discovery.request,
+						),
+					);
+				} else if (operation === 'search') {
+					const query = this.getNodeParameter('query', i) as string;
+					const filters = this.getNodeParameter('searchFilters', i, {}) as IDataObject;
+					const discovery = customerSafeDiscovery.search(baseUrl, query, filters);
+					responseData = discovery.read(
+						await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'anyApiApi',
+							discovery.request,
+						),
+					);
 				} else {
 					responseData = (await this.helpers.httpRequestWithAuthentication.call(
 						this,
