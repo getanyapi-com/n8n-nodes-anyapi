@@ -1,15 +1,13 @@
 name: Publish to npm
 
 # Publishes the package with an npm provenance attestation when a version tag
-# (e.g. v0.1.1) is pushed or a GitHub Release is published. n8n requires verified
-# community nodes to be published from CI with provenance.
+# (e.g. v0.1.1) is pushed. n8n requires verified community nodes to be published
+# from CI with provenance.
 
 on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -36,6 +34,8 @@ jobs:
         run: npm run build
       - name: Test
         run: npm test
+      - name: Live discovery compatibility canary
+        run: npm run canary:live
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -28,7 +28,9 @@ The node exposes one **AnyAPI** node with five operations:
 - **Search APIs** - run a ranked catalog query, optionally scoped by category or platform.
 - **Get Balance** - return the remaining wallet balance in USD.
 
-The **API** dropdown loads live from the AnyAPI catalog, so every available SKU is selectable and newly added APIs appear automatically. Discovery operations return the gateway's customer-safe nested USD pricing without exposing internal accounting fields or upstream identities.
+The **API** dropdown loads live from the AnyAPI catalog, so every available SKU is selectable and newly added APIs appear automatically. Discovery operations return the gateway's customer-safe nested USD pricing and optional failover metadata without exposing internal accounting fields or upstream identities.
+
+The node is intentionally a lightweight adapter. It uses n8n's native HTTP and credential helpers, projects the discovery fields its UI needs, and delegates input validation, provider selection, routing, failover, pricing, and billing to the AnyAPI gateway. Safe new discovery fields therefore do not require a node release.
 
 ### Response budget options (Run API)
 
