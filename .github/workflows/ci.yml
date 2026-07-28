@@ -1,5 +1,10 @@
 name: CI
 
+# Runs the same gate n8n's community-node review runs, so a package that would be
+# rejected fails here first instead of at review time. `npm run lint` is the n8n
+# community-node lint (`n8n-node lint` from @n8n/node-cli), which also carries the
+# legacy eslint-plugin-n8n-nodes-base rules -- see eslint.config.mjs.
+
 on:
   pull_request:
   push:
@@ -17,5 +22,13 @@ jobs:
         with:
           node-version: '20'
           cache: npm
+      # --ignore-scripts skips native addon builds (a transitive isolated-vm dep
+      # of n8n-workflow that fails to compile on the runner). We only need the
+      # TypeScript types and the lint/build toolchain, not that native module.
       - run: npm ci --no-audit --no-fund --ignore-scripts
-      - run: npm run check
+      - name: n8n community-node lint
+        run: npm run lint
+      - name: Build (tsc + copy icons into dist)
+        run: npm run build
+      - name: Test
+        run: npm test

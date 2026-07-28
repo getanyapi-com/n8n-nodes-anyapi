@@ -1,5 +1,6 @@
 import type {
 	IAuthenticateGeneric,
+	Icon,
 	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
@@ -13,6 +14,11 @@ export class AnyApiApi implements ICredentialType {
 	name = 'anyApiApi';
 
 	displayName = 'AnyAPI API';
+
+	// The Any Tag mark, resolved relative to this file and copied into dist by
+	// `gulp build:icons`. Two variants so the credential reads on either editor
+	// theme: brand blue on light, the muted dark-mode indigo on dark.
+	icon: Icon = { light: 'file:anyapi.svg', dark: 'file:anyapi.dark.svg' };
 
 	documentationUrl = 'https://getanyapi.com/docs';
 

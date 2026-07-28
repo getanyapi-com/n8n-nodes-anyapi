@@ -11,7 +11,7 @@ import type {
 	ResourceMapperField,
 	ResourceMapperFields,
 } from 'n8n-workflow';
-import { NodeApiError } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
 import { customerSafeDiscovery } from './discovery';
 
@@ -66,7 +66,9 @@ export class AnyApi implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'AnyAPI',
 		name: 'anyApi',
-		icon: 'file:anyapi.svg',
+		// Two variants of the Any Tag mark so the node reads on either editor theme:
+		// brand blue on light, the muted dark-mode indigo on dark.
+		icon: { light: 'file:anyapi.svg', dark: 'file:anyapi.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle:
@@ -77,8 +79,8 @@ export class AnyApi implements INodeType {
 		// only when it opts in here (the old community tool-usage env var is gone).
 		usableAsTool: true,
 		defaults: { name: 'AnyAPI' },
-		inputs: ['main'],
-		outputs: ['main'],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'anyApiApi', required: true }],
 		properties: [
 			{
@@ -425,7 +427,9 @@ export class AnyApi implements INodeType {
 					});
 					continue;
 				}
-				throw new NodeApiError(this.getNode(), error as JsonObject);
+				// itemIndex ties the failure back to the input item that caused it, so
+				// the editor highlights the right row instead of the whole node.
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 			}
 		}
 
