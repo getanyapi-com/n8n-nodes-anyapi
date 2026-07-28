@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-anyapi",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "n8n community node for AnyAPI: run any scraping or data API through one key, billed per request in USD, no subscription.",
   "keywords": [
     "n8n-community-node-package",
@@ -27,6 +27,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc && gulp build:icons",
+    "canary:live": "node scripts/live-discovery-canary.cjs",
     "check": "npm run lint && npm test",
     "dev": "tsc --watch",
     "lint": "n8n-node lint",

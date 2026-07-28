@@ -37,36 +37,42 @@ function stringAt(value: unknown, path: string): string {
 	return value;
 }
 
-function numberAt(value: unknown, path: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-		return contractError(path, 'expected a non-negative finite number');
+function finiteNumberAt(value: unknown, path: string): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) {
+		return contractError(path, 'expected a finite number');
 	}
 	return value;
 }
 
-function onlyKeys(value: IDataObject, allowed: readonly string[], path: string): void {
-	for (const key of Object.keys(value)) {
-		if (key.toLowerCase().includes('credit')) {
-			contractError(`${path}.${key}`, 'internal accounting fields are forbidden');
-		}
-		if (!allowed.includes(key)) contractError(`${path}.${key}`, 'unexpected field');
-	}
+function usdAt(value: unknown, path: string): number {
+	const amount = finiteNumberAt(value, path);
+	if (amount < 0) return contractError(path, 'expected a non-negative finite number');
+	return amount;
 }
 
-function assertCustomerSafeKeys(value: unknown, path: string): void {
+function booleanAt(value: unknown, path: string): boolean {
+	if (typeof value !== 'boolean') return contractError(path, 'expected a boolean');
+	return value;
+}
+
+// Scan the complete raw payload before projection. Unknown fields are forward-compatible,
+// but internal accounting names and upstream provider identities are never customer-safe.
+function assertCustomerSafe(value: unknown, path: string): void {
 	if (Array.isArray(value)) {
-		value.forEach((entry, index) => assertCustomerSafeKeys(entry, `${path}[${index}]`));
+		value.forEach((entry, index) => assertCustomerSafe(entry, `${path}[${index}]`));
 		return;
 	}
 	if (value === null || typeof value !== 'object') return;
+
 	for (const [key, nested] of Object.entries(value)) {
+		const nestedPath = `${path}.${key}`;
 		if (key.toLowerCase().includes('credit')) {
-			contractError(`${path}.${key}`, 'internal accounting fields are forbidden');
+			contractError(nestedPath, 'internal accounting fields are forbidden');
 		}
-		if (key === 'provider' && typeof nested === 'string' && nested !== 'AnyAPI') {
-			contractError(`${path}.${key}`, 'provider must be AnyAPI');
+		if (key === 'provider' && nested !== 'AnyAPI') {
+			contractError(nestedPath, 'provider must be AnyAPI');
 		}
-		assertCustomerSafeKeys(nested, `${path}.${key}`);
+		assertCustomerSafe(nested, nestedPath);
 	}
 }
 
@@ -76,168 +82,152 @@ function offerAt(value: unknown, path: string): PricingOffer {
 	if (model !== 'flat' && model !== 'linear') {
 		return contractError(`${path}.model`, 'expected flat or linear');
 	}
-	const unit = stringAt(offer.unit, `${path}.unit`);
-	if (unit.trim() === '') contractError(`${path}.unit`, 'must not be empty');
-	const maxUsd = numberAt(offer.maxUsd, `${path}.maxUsd`);
 
-	if (model === 'flat') {
-		onlyKeys(offer, ['model', 'unit', 'maxUsd'], path);
-		if (unit !== 'request') contractError(`${path}.unit`, 'flat offers use request');
-		return { model, unit, maxUsd };
-	}
-
-	onlyKeys(offer, ['model', 'unit', 'baseUsd', 'perUnitUsd', 'maxUsd'], path);
-	return {
+	const projected: PricingOffer = {
 		model,
-		unit,
-		baseUsd: numberAt(offer.baseUsd, `${path}.baseUsd`),
-		perUnitUsd: numberAt(offer.perUnitUsd, `${path}.perUnitUsd`),
-		maxUsd,
+		unit: stringAt(offer.unit, `${path}.unit`),
+		maxUsd: usdAt(offer.maxUsd, `${path}.maxUsd`),
+	};
+	if (projected.unit.trim() === '') contractError(`${path}.unit`, 'must not be empty');
+
+	if (model === 'linear') {
+		projected.baseUsd = usdAt(offer.baseUsd, `${path}.baseUsd`);
+		projected.perUnitUsd = usdAt(offer.perUnitUsd, `${path}.perUnitUsd`);
+	}
+	return projected;
+}
+
+function pricingAt(value: unknown, path: string): IDataObject {
+	const pricing = recordAt(value, path);
+	return {
+		from: offerAt(pricing.from, `${path}.from`) as unknown as IDataObject,
+		failoverMaxUsd: usdAt(pricing.failoverMaxUsd, `${path}.failoverMaxUsd`),
 	};
 }
 
-function pricingAt(value: unknown, path: string): { from: PricingOffer; failoverMaxUsd: number } {
-	const pricing = recordAt(value, path);
-	onlyKeys(pricing, ['from', 'failoverMaxUsd'], path);
-	const from = offerAt(pricing.from, `${path}.from`);
-	const failoverMaxUsd = numberAt(pricing.failoverMaxUsd, `${path}.failoverMaxUsd`);
-	if (failoverMaxUsd < from.maxUsd) {
-		contractError(`${path}.failoverMaxUsd`, 'must be at least pricing.from.maxUsd');
-	}
-	return { from, failoverMaxUsd };
-}
-
-function sameOffer(left: PricingOffer, right: PricingOffer): boolean {
-	return (
-		left.model === right.model &&
-		left.unit === right.unit &&
-		left.baseUsd === right.baseUsd &&
-		left.perUnitUsd === right.perUnitUsd &&
-		left.maxUsd === right.maxUsd
-	);
-}
-
-function healthAt(value: unknown, path: string): void {
+function healthAt(value: unknown, path: string): IDataObject {
 	const health = recordAt(value, path);
-	onlyKeys(health, ['window', 'uptimePct', 'latencyP50Ms', 'requests'], path);
-	if (stringAt(health.window, `${path}.window`) !== '30d') {
-		contractError(`${path}.window`, 'expected 30d');
-	}
-	numberAt(health.uptimePct, `${path}.uptimePct`);
-	numberAt(health.latencyP50Ms, `${path}.latencyP50Ms`);
-	numberAt(health.requests, `${path}.requests`);
+	return {
+		window: stringAt(health.window, `${path}.window`),
+		uptimePct: finiteNumberAt(health.uptimePct, `${path}.uptimePct`),
+		latencyP50Ms: finiteNumberAt(health.latencyP50Ms, `${path}.latencyP50Ms`),
+		requests: finiteNumberAt(health.requests, `${path}.requests`),
+	};
 }
 
-function schemaAt(value: unknown, path: string, required: boolean): void {
-	if (value === undefined && !required) return;
-	recordAt(value, path);
+function schemaAt(value: unknown, path: string, required: boolean): IDataObject | undefined {
+	if (value === undefined && !required) return undefined;
+	return recordAt(value, path);
+}
+
+function laneAt(value: unknown, path: string): IDataObject {
+	const lane = recordAt(value, path);
+	const projected: IDataObject = {
+		pricing: pricingOfferObjectAt(lane.pricing, `${path}.pricing`),
+	};
+	if (lane.health !== undefined) projected.health = healthAt(lane.health, `${path}.health`);
+	return projected;
+}
+
+function pricingOfferObjectAt(value: unknown, path: string): IDataObject {
+	return offerAt(value, path) as unknown as IDataObject;
+}
+
+function optionalBoolean(
+	source: IDataObject,
+	target: IDataObject,
+	field: string,
+	path: string,
+): void {
+	if (source[field] !== undefined) target[field] = booleanAt(source[field], `${path}.${field}`);
 }
 
 function apiAt(value: unknown, path: string, requireSchemas: boolean): IDataObject {
 	const api = recordAt(value, path);
-	onlyKeys(
-		api,
-		[
-			'id',
-			'slug',
-			'category',
-			'name',
-			'description',
-			'provider',
-			'pricing',
-			'lanes',
-			'inputSchema',
-			'outputSchema',
-			'heavy',
-			'tryEligible',
-		],
-		path,
-	);
-	for (const field of ['id', 'slug', 'category', 'name', 'description']) {
-		stringAt(api[field], `${path}.${field}`);
-	}
-	if (api.provider !== 'AnyAPI') contractError(`${path}.provider`, 'must be AnyAPI');
-	const pricing = pricingAt(api.pricing, `${path}.pricing`);
-	if (!Array.isArray(api.lanes)) contractError(`${path}.lanes`, 'expected an array');
-	if (api.lanes.length === 0) contractError(`${path}.lanes`, 'expected at least one lane');
-	let firstLaneOffer: PricingOffer | undefined;
-	let greatestLaneMaxUsd = 0;
-	api.lanes.forEach((rawLane, index) => {
-		const lanePath = `${path}.lanes[${index}]`;
-		const lane = recordAt(rawLane, lanePath);
-		onlyKeys(lane, ['pricing', 'health'], lanePath);
-		const offer = offerAt(lane.pricing, `${lanePath}.pricing`);
-		if (index === 0) firstLaneOffer = offer;
-		greatestLaneMaxUsd = Math.max(greatestLaneMaxUsd, offer.maxUsd);
-		if (lane.health !== undefined) healthAt(lane.health, `${lanePath}.health`);
-	});
-	if (firstLaneOffer === undefined || !sameOffer(pricing.from, firstLaneOffer)) {
-		contractError(`${path}.pricing.from`, 'must equal the first anonymous lane pricing');
-	}
-	if (pricing.failoverMaxUsd !== greatestLaneMaxUsd) {
-		contractError(
-			`${path}.pricing.failoverMaxUsd`,
-			'must equal the greatest maxUsd across anonymous lane pricing',
-		);
-	}
-	schemaAt(api.inputSchema, `${path}.inputSchema`, requireSchemas);
-	schemaAt(api.outputSchema, `${path}.outputSchema`, requireSchemas);
-	if (typeof api.tryEligible !== 'boolean') {
-		contractError(`${path}.tryEligible`, 'expected a boolean');
-	}
-	if (api.heavy !== undefined && typeof api.heavy !== 'boolean') {
-		contractError(`${path}.heavy`, 'expected a boolean');
-	}
-	assertCustomerSafeKeys(api, path);
-	return api;
+	const lanes = api.lanes;
+	if (!Array.isArray(lanes)) contractError(`${path}.lanes`, 'expected an array');
+
+	const projected: IDataObject = {
+		id: stringAt(api.id, `${path}.id`),
+		slug: stringAt(api.slug, `${path}.slug`),
+		category: stringAt(api.category, `${path}.category`),
+		name: stringAt(api.name, `${path}.name`),
+		description: stringAt(api.description, `${path}.description`),
+		provider: stringAt(api.provider, `${path}.provider`),
+		pricing: pricingAt(api.pricing, `${path}.pricing`),
+		lanes: lanes.map((lane, index) => laneAt(lane, `${path}.lanes[${index}]`)),
+		tryEligible: booleanAt(api.tryEligible, `${path}.tryEligible`),
+	};
+
+	const inputSchema = schemaAt(api.inputSchema, `${path}.inputSchema`, requireSchemas);
+	if (inputSchema !== undefined) projected.inputSchema = inputSchema;
+	const outputSchema = schemaAt(api.outputSchema, `${path}.outputSchema`, requireSchemas);
+	if (outputSchema !== undefined) projected.outputSchema = outputSchema;
+	optionalBoolean(api, projected, 'heavy', path);
+	optionalBoolean(api, projected, 'failover', path);
+	optionalBoolean(api, projected, 'excludesCallerDelay', path);
+	return projected;
 }
 
 function browseResponse(value: unknown): IDataObject[] {
+	assertCustomerSafe(value, 'browse');
 	const envelope = recordAt(value, 'browse');
-	onlyKeys(envelope, ['apis'], 'browse');
 	if (!Array.isArray(envelope.apis)) contractError('browse.apis', 'expected an array');
 	return envelope.apis.map((api, index) => apiAt(api, `browse.apis[${index}]`, false));
 }
 
-function searchResultAt(value: unknown, path: string): void {
-	const result = recordAt(value, path);
-	onlyKeys(
-		result,
-		[
-			'slug',
-			'platformId',
-			'name',
-			'description',
-			'category',
-			'provider',
-			'pricing',
-			'relevance',
-			'highlightFields',
-		],
-		path,
-	);
-	for (const field of ['slug', 'platformId', 'name', 'description', 'category']) {
-		stringAt(result[field], `${path}.${field}`);
+function highlightAt(value: unknown, path: string): IDataObject {
+	const highlight = recordAt(value, path);
+	const projected: IDataObject = {
+		path: stringAt(highlight.path, `${path}.path`),
+		type: stringAt(highlight.type, `${path}.type`),
+	};
+	if (highlight.why !== undefined) {
+		projected.why = stringAt(highlight.why, `${path}.why`);
 	}
-	if (result.provider !== 'AnyAPI') contractError(`${path}.provider`, 'must be AnyAPI');
-	pricingAt(result.pricing, `${path}.pricing`);
-	const relevance = numberAt(result.relevance, `${path}.relevance`);
-	if (relevance > 1) contractError(`${path}.relevance`, 'must not exceed 1');
-	assertCustomerSafeKeys(result, path);
+	return projected;
+}
+
+function searchResultAt(value: unknown, path: string): IDataObject {
+	const result = recordAt(value, path);
+	const projected: IDataObject = {
+		slug: stringAt(result.slug, `${path}.slug`),
+		platformId: stringAt(result.platformId, `${path}.platformId`),
+		name: stringAt(result.name, `${path}.name`),
+		description: stringAt(result.description, `${path}.description`),
+		category: stringAt(result.category, `${path}.category`),
+		provider: stringAt(result.provider, `${path}.provider`),
+		pricing: pricingAt(result.pricing, `${path}.pricing`),
+		relevance: finiteNumberAt(result.relevance, `${path}.relevance`),
+	};
+	if (result.highlightFields !== undefined) {
+		if (!Array.isArray(result.highlightFields)) {
+			contractError(`${path}.highlightFields`, 'expected an array');
+		}
+		projected.highlightFields = result.highlightFields.map((highlight, index) =>
+			highlightAt(highlight, `${path}.highlightFields[${index}]`),
+		);
+	}
+	return projected;
 }
 
 function searchResponse(value: unknown): IDataObject {
+	assertCustomerSafe(value, 'search');
 	const envelope = recordAt(value, 'search');
-	onlyKeys(envelope, ['results', 'total', 'ranking'], 'search');
 	if (!Array.isArray(envelope.results)) contractError('search.results', 'expected an array');
-	envelope.results.forEach((result, index) => searchResultAt(result, `search.results[${index}]`));
-	const total = numberAt(envelope.total, 'search.total');
-	if (!Number.isInteger(total)) contractError('search.total', 'expected an integer');
-	if (envelope.ranking !== 'semantic' && envelope.ranking !== 'keyword') {
+	const total = finiteNumberAt(envelope.total, 'search.total');
+	if (!Number.isInteger(total) || total < 0) contractError('search.total', 'expected a non-negative integer');
+	const ranking = stringAt(envelope.ranking, 'search.ranking');
+	if (ranking !== 'semantic' && ranking !== 'keyword') {
 		contractError('search.ranking', 'expected semantic or keyword');
 	}
-	assertCustomerSafeKeys(envelope, 'search');
-	return envelope;
+	return {
+		results: envelope.results.map((result, index) =>
+			searchResultAt(result, `search.results[${index}]`),
+		),
+		total,
+		ranking,
+	};
 }
 
 function fmtUsd(value: number): string {
@@ -246,7 +236,8 @@ function fmtUsd(value: number): string {
 }
 
 function priceLabel(value: unknown): string {
-	const offer = pricingAt(value, 'catalog.pricing').from;
+	const pricing = pricingAt(value, 'catalog.pricing');
+	const offer = pricing.from as unknown as PricingOffer;
 	if (offer.model === 'flat') return ` (${fmtUsd(offer.maxUsd)}/${offer.unit})`;
 	const parts: string[] = [];
 	if ((offer.baseUsd ?? 0) > 0) parts.push(`${fmtUsd(offer.baseUsd ?? 0)}/request`);
@@ -289,7 +280,10 @@ export const customerSafeDiscovery = {
 	detail(baseUrl: string, slug: string): DiscoveryExchange<IDataObject> {
 		return {
 			request: detailRequest(baseUrl, slug),
-			read: (value) => apiAt(value, 'detail', true),
+			read: (value) => {
+				assertCustomerSafe(value, 'detail');
+				return apiAt(value, 'detail', true);
+			},
 		};
 	},
 	priceLabel,
