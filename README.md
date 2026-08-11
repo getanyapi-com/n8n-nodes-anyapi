@@ -20,13 +20,15 @@ n8n-nodes-anyapi
 
 ## Operations
 
-The node exposes one **AnyAPI** node with five operations:
+The node exposes one **AnyAPI** node with seven operations:
 
 - **Run API** - execute any API by SKU. Inputs render as typed fields loaded from the API schema (or raw JSON if you prefer). Returns `output`, `provider`, `costUsd`, and `items`.
 - **Get API Schema** - fetch the input and output JSON Schema for one API.
 - **List APIs** - browse the AnyAPI catalog, optionally filtered by category.
 - **Search APIs** - run a ranked catalog query, optionally scoped by category or platform.
 - **Get Balance** - return the remaining wallet balance in USD.
+- **Get Request** - retrieve the current stored state of a durable Request without repeating its paid API call.
+- **Wait for Request** - poll a durable Request until it reaches a terminal state, then return its retained result.
 
 The **API** dropdown loads live from the AnyAPI catalog, so every available SKU is selectable and newly added APIs appear automatically. Discovery operations return the gateway's customer-safe nested USD pricing and optional failover metadata without exposing internal accounting fields or upstream identities.
 
@@ -37,7 +39,7 @@ The node is intentionally a lightweight adapter. It uses n8n's native HTTP and c
 These trim the response payload without changing what you are charged:
 
 - **Fields** - comma-separated keys to keep on each result item (dotted paths like `author.name` allowed).
-- **Max Items** - cap the number of result items returned.
+- **Max Items** - cap the number of result items returned. Leave it at `0` to omit the limit and return the complete response.
 - **Summary Only** - return only a structural outline instead of the full data.
 
 ## Credentials
@@ -56,8 +58,8 @@ The credential is validated against the wallet balance endpoint when you save it
 2. Select **Run API**.
 3. Pick an API from the dropdown, for example **Google Search** or **Reddit Search**. Each option shows its live price (per request, per result, or both).
 4. Provide the input. There are two **Input Mode** choices:
-   - **Fields (from schema)** - the default. The node loads the selected API's input schema and renders typed fields, with required fields flagged and enum fields shown as dropdowns. No JSON to hand write.
-   - **JSON** - provide the raw payload, useful for expressions, for example:
+   - **Fields (from schema)** - the default. The node loads the selected API's input schema and renders native scalar and enum controls. Object, array, union, and null-capable inputs use structured JSON controls and preserve their JSON values. Invalid structured JSON fails before the paid request and directs you to Raw JSON mode.
+   - **Raw JSON** - provide the raw payload, useful for expressions, for example:
 
      ```json
      { "query": "apify alternative" }
