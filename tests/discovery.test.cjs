@@ -105,6 +105,8 @@ test('browse and ranked search ignore cloned safe additive fields', async () => 
 	search.futureEnvelopeField = true;
 	search.results[0].futureResultField = true;
 	search.results[0].pricing.futurePricingField = true;
+	search.results[0].lanes = clone(golden.rest.browse.apis[0].lanes);
+	search.results[0].latency = clone(golden.rest.detail['linear.data'].latency);
 	const searched = await execute(
 		{ operation: 'search', query: 'data', searchFilters: {} },
 		search,
