@@ -5,39 +5,60 @@ const {
 	AnyApi,
 	apiFixture,
 	assertCustomerSafe,
+	clone,
 	detailFixture,
 	execute,
 	fakeContext,
 	flatOffer,
+	golden,
 	latency,
 	linearOffer,
 	searchFixture,
 } = require('./helpers.cjs');
 
-test('browse retains the exact authored operation, execution, pricing, lanes, sources, and health', async () => {
-	const api = apiFixture();
-	const { output, requests } = await execute(
-		{ operation: 'list', filters: { category: 'search' } },
-		{ apis: [api], futureEnvelopeField: true },
+test('public browse, ranked-search, and detail execute seams read the shared V1 golden exactly', async () => {
+	const browse = await execute(
+		{ operation: 'list', filters: { category: 'data' } },
+		clone(golden.rest.browse),
 	);
-
-	assert.deepEqual(requests, [
+	assert.deepEqual(browse.requests, [
 		{
 			method: 'GET',
 			url: 'https://api.example.test/v1/apis',
-			qs: { category: 'search' },
+			qs: { category: 'data' },
 			json: true,
 		},
 	]);
-	assert.deepEqual(output[0][0].json, api);
-	assert.deepEqual(output[0][0].json.pricing.from, linearOffer);
 	assert.deepEqual(
-		output[0][0].json.lanes.map((lane) => lane.pricing),
-		[linearOffer, flatOffer],
+		browse.output[0].map(({ json }) => json),
+		golden.rest.browse.apis,
 	);
-	assert.equal(output[0][0].json.lanes[0].source.id, 'silver-fox');
-	assert.deepEqual(output[0][0].json.lanes[0].health, api.lanes[0].health);
-	assertCustomerSafe(assert, output);
+
+	const search = await execute(
+		{
+			operation: 'search',
+			query: 'data',
+			searchFilters: { category: 'data', platform: 'linear', limit: 2 },
+		},
+		clone(golden.rest.search),
+	);
+	assert.deepEqual(search.requests[0].qs, {
+		q: 'data',
+		category: 'data',
+		platform: 'linear',
+		limit: 2,
+	});
+	assert.deepEqual(search.output[0][0].json, golden.rest.search);
+
+	for (const [slug, wire] of Object.entries(golden.rest.detail)) {
+		const detail = await execute(
+			{ operation: 'getSchema', sku: slug },
+			clone(wire),
+		);
+		assert.equal(detail.requests[0].url, `https://api.example.test/v1/apis/${slug}`);
+		assert.deepEqual(detail.output[0][0].json, wire);
+	}
+	assertCustomerSafe(assert, [browse.output, search.output, golden.rest.detail]);
 });
 
 test('browse accepts an empty authoritative lane plan and absent optional booleans', async () => {
@@ -51,63 +72,44 @@ test('browse accepts an empty authoritative lane plan and absent optional boolea
 	assert.deepEqual(output[0][0].json, api);
 });
 
-test('ranked search retains lightweight facts, false failover, and true-or-absent caller delay', async () => {
-	const ordinary = searchFixture({
-		lanes: apiFixture().lanes,
-		latency,
-		futureResult: true,
-	});
-	const delayed = searchFixture({
-		slug: 'search.delayed',
-		path: '/v1/run/search.delayed',
-		tryMaxItems: 8,
-		failover: true,
-		excludesCallerDelay: true,
-		relevance: 0.8,
-	});
-	const response = {
-		results: [ordinary, delayed],
-		total: 2,
-		ranking: 'semantic',
-		futureEnvelope: true,
-	};
-	const { output, requests } = await execute(
-		{
-			operation: 'search',
-			query: 'web results',
-			searchFilters: { category: 'search', platform: 'search', limit: 12 },
-		},
-		response,
-	);
-
-	assert.deepEqual(requests[0].qs, {
-		q: 'web results',
-		category: 'search',
-		platform: 'search',
-		limit: 12,
-	});
-	const projected = output[0][0].json;
-	assert.equal(projected.results[0].failover, false);
-	assert.ok(!Object.hasOwn(projected.results[0], 'excludesCallerDelay'));
-	assert.equal(projected.results[1].excludesCallerDelay, true);
-	assert.equal(projected.results[1].tryMaxItems, 8);
-	for (const result of projected.results) {
-		assert.ok(!Object.hasOwn(result, 'lanes'));
-		assert.ok(!Object.hasOwn(result, 'latency'));
-	}
-	assert.deepEqual(projected.results[0], searchFixture());
-	assertCustomerSafe(assert, output);
-});
-
 test('ranked search remains rolling-safe when additive booleans and try limits are absent', async () => {
 	const result = searchFixture();
 	delete result.failover;
+	delete result.excludesCallerDelay;
+	delete result.tryMaxItems;
 	const { output } = await execute(
 		{ operation: 'search', query: 'web', searchFilters: {} },
 		{ results: [result], total: 1, ranking: 'keyword' },
 	);
 	assert.ok(!Object.hasOwn(output[0][0].json.results[0], 'failover'));
+	assert.ok(!Object.hasOwn(output[0][0].json.results[0], 'excludesCallerDelay'));
 	assert.ok(!Object.hasOwn(output[0][0].json.results[0], 'tryMaxItems'));
+});
+
+test('browse and ranked search ignore cloned safe additive fields', async () => {
+	const browse = clone(golden.rest.browse);
+	browse.futureEnvelopeField = true;
+	browse.apis[0].futureApiField = true;
+	browse.apis[0].pricing.futurePricingField = true;
+	browse.apis[0].lanes[0].futureLaneField = true;
+	browse.apis[0].lanes[0].pricing.futureOfferField = true;
+	browse.apis[0].lanes[0].source.futureSourceField = true;
+	browse.apis[0].lanes[0].health.futureHealthField = true;
+	const browsed = await execute({ operation: 'list', filters: {} }, browse);
+	assert.deepEqual(
+		browsed.output[0].map(({ json }) => json),
+		golden.rest.browse.apis,
+	);
+
+	const search = clone(golden.rest.search);
+	search.futureEnvelopeField = true;
+	search.results[0].futureResultField = true;
+	search.results[0].pricing.futurePricingField = true;
+	const searched = await execute(
+		{ operation: 'search', query: 'data', searchFilters: {} },
+		search,
+	);
+	assert.deepEqual(searched.output[0][0].json, golden.rest.search);
 });
 
 test('ranked search rejects a false caller-delay flag instead of inventing false semantics', async () => {
@@ -238,9 +240,9 @@ test('API dropdown labels headline pricing without reordering or comparing lanes
 	assert.deepEqual(
 		options.map(({ name, value }) => ({ name, value })),
 		[
-			{ name: 'Flat API ($0.00325/request)', value: 'flat.api' },
+			{ name: 'Flat API ($0.005/request)', value: 'flat.api' },
 			{
-				name: 'Linear API ($0.00005/request + $0.0008/result, max $0.04002)',
+				name: 'Linear API ($0.001/request + $0.0005/result, max $0.006)',
 				value: 'linear.api',
 			},
 		],

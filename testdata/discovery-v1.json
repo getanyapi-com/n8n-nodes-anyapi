@@ -1,0 +1,653 @@
+{
+  "version": 1,
+  "rest": {
+    "browse": {
+      "apis": [
+        {
+          "category": "data",
+          "description": "Durable line-item data",
+          "excludesCallerDelay": true,
+          "execution": {
+            "mode": "durable"
+          },
+          "failover": true,
+          "heavy": true,
+          "id": "linear.data",
+          "lanes": [
+            {
+              "health": {
+                "latencyP50Ms": 321,
+                "latencySample": 13,
+                "requests": 23,
+                "servedRequests": 13,
+                "uptimePct": 87.5,
+                "uptimeSample": 19,
+                "window": "30d"
+              },
+              "pricing": {
+                "baseUsd": 0.001,
+                "maxUsd": 0.006,
+                "model": "linear",
+                "perUnitUsd": 0.0005,
+                "unit": "result"
+              },
+              "source": {
+                "artworkKey": "fox",
+                "id": "silver-fox",
+                "kind": "anonymous",
+                "name": "Silver Fox"
+              }
+            },
+            {
+              "pricing": {
+                "maxUsd": 0.004,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "atlas",
+                "id": "atlas-data",
+                "kind": "brand",
+                "name": "Atlas Data"
+              }
+            },
+            {
+              "pricing": {
+                "maxUsd": 0.01,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "owl",
+                "id": "amber-owl",
+                "kind": "anonymous",
+                "name": "Amber Owl"
+              }
+            }
+          ],
+          "method": "POST",
+          "name": "Linear data",
+          "path": "/operations/linear.data",
+          "pricing": {
+            "failoverMaxUsd": 0.01,
+            "from": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "linear.data",
+          "tryEligible": true,
+          "tryMaxItems": 3
+        },
+        {
+          "category": "data",
+          "description": "Synchronous flat-price data",
+          "execution": {
+            "mode": "sync"
+          },
+          "failover": false,
+          "id": "flat.data",
+          "lanes": [
+            {
+              "pricing": {
+                "maxUsd": 0.005,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "atlas",
+                "id": "atlas-data",
+                "kind": "brand",
+                "name": "Atlas Data"
+              }
+            }
+          ],
+          "method": "POST",
+          "name": "Flat data",
+          "path": "/operations/flat.data",
+          "pricing": {
+            "failoverMaxUsd": 0.005,
+            "from": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "flat.data",
+          "tryEligible": false
+        }
+      ]
+    },
+    "detail": {
+      "flat.data": {
+        "category": "data",
+        "description": "Synchronous flat-price data",
+        "execution": {
+          "mode": "sync"
+        },
+        "failover": false,
+        "id": "flat.data",
+        "inputSchema": {
+          "properties": {
+            "limit": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "limit"
+          ],
+          "type": "object"
+        },
+        "lanes": [
+          {
+            "pricing": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            },
+            "source": {
+              "artworkKey": "atlas",
+              "id": "atlas-data",
+              "kind": "brand",
+              "name": "Atlas Data"
+            }
+          }
+        ],
+        "latency": null,
+        "method": "POST",
+        "name": "Flat data",
+        "outputSchema": {
+          "properties": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "path": "/operations/flat.data",
+        "pricing": {
+          "failoverMaxUsd": 0.005,
+          "from": {
+            "maxUsd": 0.005,
+            "model": "flat",
+            "unit": "request"
+          }
+        },
+        "provider": "AnyAPI",
+        "slug": "flat.data",
+        "tryEligible": false
+      },
+      "linear.data": {
+        "category": "data",
+        "description": "Durable line-item data",
+        "excludesCallerDelay": true,
+        "execution": {
+          "mode": "durable"
+        },
+        "failover": true,
+        "heavy": true,
+        "id": "linear.data",
+        "inputSchema": {
+          "properties": {
+            "limit": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "limit"
+          ],
+          "type": "object"
+        },
+        "lanes": [
+          {
+            "health": {
+              "latencyP50Ms": 321,
+              "latencySample": 13,
+              "requests": 23,
+              "servedRequests": 13,
+              "uptimePct": 87.5,
+              "uptimeSample": 19,
+              "window": "30d"
+            },
+            "pricing": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            },
+            "source": {
+              "artworkKey": "fox",
+              "id": "silver-fox",
+              "kind": "anonymous",
+              "name": "Silver Fox"
+            }
+          },
+          {
+            "pricing": {
+              "maxUsd": 0.004,
+              "model": "flat",
+              "unit": "request"
+            },
+            "source": {
+              "artworkKey": "atlas",
+              "id": "atlas-data",
+              "kind": "brand",
+              "name": "Atlas Data"
+            }
+          },
+          {
+            "pricing": {
+              "maxUsd": 0.01,
+              "model": "flat",
+              "unit": "request"
+            },
+            "source": {
+              "artworkKey": "owl",
+              "id": "amber-owl",
+              "kind": "anonymous",
+              "name": "Amber Owl"
+            }
+          }
+        ],
+        "latency": {
+          "basis": "service_time_excludes_caller_requested_delay",
+          "p50Ms": 52399,
+          "p95Ms": 106562,
+          "p99Ms": 115492,
+          "sample": 157,
+          "window": "30d"
+        },
+        "method": "POST",
+        "name": "Linear data",
+        "outputSchema": {
+          "properties": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "path": "/operations/linear.data",
+        "pricing": {
+          "failoverMaxUsd": 0.01,
+          "from": {
+            "baseUsd": 0.001,
+            "maxUsd": 0.006,
+            "model": "linear",
+            "perUnitUsd": 0.0005,
+            "unit": "result"
+          }
+        },
+        "provider": "AnyAPI",
+        "slug": "linear.data",
+        "tryEligible": true,
+        "tryMaxItems": 3
+      }
+    },
+    "search": {
+      "ranking": "semantic",
+      "results": [
+        {
+          "category": "data",
+          "description": "Durable line-item data",
+          "excludesCallerDelay": true,
+          "execution": {
+            "mode": "durable"
+          },
+          "failover": true,
+          "method": "POST",
+          "name": "Linear data",
+          "path": "/operations/linear.data",
+          "platformId": "linear",
+          "pricing": {
+            "failoverMaxUsd": 0.01,
+            "from": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            }
+          },
+          "provider": "AnyAPI",
+          "relevance": 1,
+          "slug": "linear.data",
+          "tryMaxItems": 3
+        },
+        {
+          "category": "data",
+          "description": "Synchronous flat-price data",
+          "execution": {
+            "mode": "sync"
+          },
+          "failover": false,
+          "method": "POST",
+          "name": "Flat data",
+          "path": "/operations/flat.data",
+          "platformId": "flat",
+          "pricing": {
+            "failoverMaxUsd": 0.005,
+            "from": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            }
+          },
+          "provider": "AnyAPI",
+          "relevance": 0.67,
+          "slug": "flat.data"
+        }
+      ],
+      "total": 2
+    }
+  },
+  "mcp": {
+    "browse": {
+      "scrapers": [
+        {
+          "category": "data",
+          "excludesCallerDelay": true,
+          "execution": {
+            "mode": "durable"
+          },
+          "failover": true,
+          "heavy": true,
+          "id": "linear.data",
+          "method": "POST",
+          "name": "Linear data",
+          "path": "/operations/linear.data",
+          "pricing": {
+            "failoverMaxUsd": 0.01,
+            "from": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "linear.data"
+        },
+        {
+          "category": "data",
+          "execution": {
+            "mode": "sync"
+          },
+          "failover": false,
+          "id": "flat.data",
+          "method": "POST",
+          "name": "Flat data",
+          "path": "/operations/flat.data",
+          "pricing": {
+            "failoverMaxUsd": 0.005,
+            "from": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "flat.data"
+        }
+      ]
+    },
+    "detail": {
+      "flat.data": {
+        "scraper": {
+          "category": "data",
+          "description": "Synchronous flat-price data",
+          "execution": {
+            "mode": "sync"
+          },
+          "failover": false,
+          "id": "flat.data",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "type": "object"
+          },
+          "lanes": [
+            {
+              "pricing": {
+                "maxUsd": 0.005,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "atlas",
+                "id": "atlas-data",
+                "kind": "brand",
+                "name": "Atlas Data"
+              }
+            }
+          ],
+          "latency": null,
+          "method": "POST",
+          "name": "Flat data",
+          "outputSchema": {
+            "properties": {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "type": "object"
+          },
+          "path": "/operations/flat.data",
+          "pricing": {
+            "failoverMaxUsd": 0.005,
+            "from": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "flat.data",
+          "tryEligible": false
+        }
+      },
+      "linear.data": {
+        "scraper": {
+          "category": "data",
+          "description": "Durable line-item data",
+          "excludesCallerDelay": true,
+          "execution": {
+            "mode": "durable"
+          },
+          "failover": true,
+          "heavy": true,
+          "id": "linear.data",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "type": "object"
+          },
+          "lanes": [
+            {
+              "health": {
+                "latencyP50Ms": 321,
+                "latencySample": 13,
+                "requests": 23,
+                "servedRequests": 13,
+                "uptimePct": 87.5,
+                "uptimeSample": 19,
+                "window": "30d"
+              },
+              "pricing": {
+                "baseUsd": 0.001,
+                "maxUsd": 0.006,
+                "model": "linear",
+                "perUnitUsd": 0.0005,
+                "unit": "result"
+              },
+              "source": {
+                "artworkKey": "fox",
+                "id": "silver-fox",
+                "kind": "anonymous",
+                "name": "Silver Fox"
+              }
+            },
+            {
+              "pricing": {
+                "maxUsd": 0.004,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "atlas",
+                "id": "atlas-data",
+                "kind": "brand",
+                "name": "Atlas Data"
+              }
+            },
+            {
+              "pricing": {
+                "maxUsd": 0.01,
+                "model": "flat",
+                "unit": "request"
+              },
+              "source": {
+                "artworkKey": "owl",
+                "id": "amber-owl",
+                "kind": "anonymous",
+                "name": "Amber Owl"
+              }
+            }
+          ],
+          "latency": {
+            "basis": "service_time_excludes_caller_requested_delay",
+            "p50Ms": 52399,
+            "p95Ms": 106562,
+            "p99Ms": 115492,
+            "sample": 157,
+            "window": "30d"
+          },
+          "method": "POST",
+          "name": "Linear data",
+          "outputSchema": {
+            "properties": {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "type": "object"
+          },
+          "path": "/operations/linear.data",
+          "pricing": {
+            "failoverMaxUsd": 0.01,
+            "from": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            }
+          },
+          "provider": "AnyAPI",
+          "slug": "linear.data",
+          "tryEligible": true,
+          "tryMaxItems": 3
+        }
+      }
+    },
+    "search": {
+      "ranking": "semantic",
+      "results": [
+        {
+          "category": "data",
+          "description": "Durable line-item data",
+          "excludesCallerDelay": true,
+          "execution": {
+            "mode": "durable"
+          },
+          "failover": true,
+          "heavy": true,
+          "id": "linear.data",
+          "method": "POST",
+          "name": "Linear data",
+          "path": "/operations/linear.data",
+          "pricing": {
+            "failoverMaxUsd": 0.01,
+            "from": {
+              "baseUsd": 0.001,
+              "maxUsd": 0.006,
+              "model": "linear",
+              "perUnitUsd": 0.0005,
+              "unit": "result"
+            }
+          },
+          "provider": "AnyAPI",
+          "relevance": 1,
+          "slug": "linear.data"
+        },
+        {
+          "category": "data",
+          "description": "Synchronous flat-price data",
+          "execution": {
+            "mode": "sync"
+          },
+          "failover": false,
+          "id": "flat.data",
+          "method": "POST",
+          "name": "Flat data",
+          "path": "/operations/flat.data",
+          "pricing": {
+            "failoverMaxUsd": 0.005,
+            "from": {
+              "maxUsd": 0.005,
+              "model": "flat",
+              "unit": "request"
+            }
+          },
+          "provider": "AnyAPI",
+          "relevance": 0.67,
+          "slug": "flat.data"
+        }
+      ],
+      "total": 2
+    }
+  }
+}
