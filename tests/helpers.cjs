@@ -1,95 +1,37 @@
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+
 const { AnyApi } = require('../dist/nodes/AnyApi/AnyApi.node.js');
 
-const flatOffer = { model: 'flat', unit: 'request', maxUsd: 0.00325 };
-const linearOffer = {
-	model: 'linear',
-	unit: 'result',
-	baseUsd: 0.00005,
-	perUnitUsd: 0.0008,
-	maxUsd: 0.04002,
-};
-const source = {
-	id: 'silver-fox',
-	name: 'Silver Fox',
-	kind: 'anonymous',
-	artworkKey: 'fox',
-};
-const health = {
-	window: '30d',
-	uptimePct: 99.8,
-	latencyP50Ms: 420,
-	uptimeSample: 900,
-	latencySample: 810,
-	requests: 950,
-	servedRequests: 810,
-};
-const latency = {
-	window: '30d',
-	p50Ms: 500,
-	p95Ms: 1200,
-	p99Ms: 2400,
-	sample: 810,
-	basis: 'service_time_excludes_caller_requested_delay',
-};
+const goldenPath = join(__dirname, '..', 'testdata', 'discovery-v1.json');
+const provenancePath = join(__dirname, '..', 'testdata', 'discovery-v1.provenance.json');
+const golden = JSON.parse(readFileSync(goldenPath, 'utf8'));
+
+function clone(value) {
+	return structuredClone(value);
+}
+
+function withOverrides(value, overrides) {
+	return Object.assign(clone(value), overrides);
+}
+
+const browseApi = golden.rest.browse.apis.find(({ slug }) => slug === 'linear.data');
+const detailApi = golden.rest.detail['linear.data'];
+const searchResult = golden.rest.search.results.find(({ slug }) => slug === 'linear.data');
+const flatOffer = clone(golden.rest.detail['flat.data'].pricing.from);
+const linearOffer = clone(detailApi.pricing.from);
+const latency = clone(detailApi.latency);
 
 function apiFixture(overrides = {}) {
-	return {
-		id: 'api-1',
-		slug: 'search.web',
-		category: 'search',
-		name: 'Web Search',
-		description: 'Search the public web.',
-		method: 'PUT',
-		path: '/operations/search.web',
-		provider: 'AnyAPI',
-		execution: { mode: 'durable' },
-		pricing: { from: linearOffer, failoverMaxUsd: 0.5 },
-		lanes: [
-			{ pricing: linearOffer, source, health },
-			{
-				pricing: flatOffer,
-				source: {
-					id: 'source-dataset',
-					name: 'Source Dataset',
-					kind: 'brand',
-					artworkKey: 'dataset',
-				},
-			},
-		],
-		heavy: false,
-		tryEligible: true,
-		tryMaxItems: 3,
-		failover: true,
-		excludesCallerDelay: true,
-		...overrides,
-	};
+	return withOverrides(browseApi, overrides);
 }
 
 function detailFixture(overrides = {}) {
-	return apiFixture({
-		inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
-		outputSchema: { type: 'object', properties: { results: { type: 'array' } } },
-		latency,
-		...overrides,
-	});
+	return withOverrides(detailApi, overrides);
 }
 
 function searchFixture(overrides = {}) {
-	return {
-		slug: 'search.web',
-		platformId: 'search',
-		name: 'Web Search',
-		description: 'Search the public web.',
-		category: 'search',
-		method: 'POST',
-		path: '/v1/run/search.web',
-		provider: 'AnyAPI',
-		execution: { mode: 'sync' },
-		pricing: { from: flatOffer, failoverMaxUsd: 0.004 },
-		failover: false,
-		relevance: 0.93,
-		...overrides,
-	};
+	return withOverrides(searchResult, overrides);
 }
 
 function fakeContext(parameters, response, { continueOnFail = false } = {}) {
@@ -140,13 +82,15 @@ module.exports = {
 	AnyApi,
 	apiFixture,
 	assertCustomerSafe,
+	clone,
 	detailFixture,
 	execute,
 	fakeContext,
 	flatOffer,
-	health,
+	golden,
+	goldenPath,
 	latency,
 	linearOffer,
+	provenancePath,
 	searchFixture,
-	source,
 };
