@@ -6,7 +6,15 @@ export type PricingOffer = {
 	unit: string;
 	baseUsd?: number;
 	perUnitUsd?: number;
+	/** USD billed for one request: exact on a flat offer, the ceiling on a linear one. */
 	maxUsd: number;
+	/**
+	 * The same published maximum per 1,000 requests, the denomination AnyAPI
+	 * quotes customers in. Read it; never derive it from `maxUsd`, because
+	 * `0.0966 * 1000` is `96.60000000000001` and the gateway publishes the
+	 * exact figure beside every offer.
+	 */
+	maxPer1kUsd: number;
 };
 
 function contractError(path: string, message: string): never {
@@ -69,12 +77,11 @@ export function offerAt(value: unknown, path: string): PricingOffer {
 	if (model !== 'flat' && model !== 'linear') {
 		return contractError(`${path}.model`, 'expected flat or linear');
 	}
-	const maxUsd = finiteNumberAt(offer.maxUsd, `${path}.maxUsd`);
-	if (maxUsd < 0) contractError(`${path}.maxUsd`, 'expected a non-negative number');
 	const projected: PricingOffer = {
 		model,
 		unit: stringAt(offer.unit, `${path}.unit`),
-		maxUsd,
+		maxUsd: nonNegativeAt(offer.maxUsd, `${path}.maxUsd`),
+		maxPer1kUsd: nonNegativeAt(offer.maxPer1kUsd, `${path}.maxPer1kUsd`),
 	};
 	if (projected.unit.trim() === '') contractError(`${path}.unit`, 'must not be empty');
 	if (model === 'linear') {
@@ -95,6 +102,10 @@ export function pricingAt(value: unknown, path: string): IDataObject {
 	return {
 		from: offerAt(pricing.from, `${path}.from`) as unknown as IDataObject,
 		failoverMaxUsd: nonNegativeAt(pricing.failoverMaxUsd, `${path}.failoverMaxUsd`),
+		failoverMaxPer1kUsd: nonNegativeAt(
+			pricing.failoverMaxPer1kUsd,
+			`${path}.failoverMaxPer1kUsd`,
+		),
 	};
 }
 

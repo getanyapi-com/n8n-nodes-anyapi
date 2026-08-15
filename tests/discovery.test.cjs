@@ -224,13 +224,13 @@ test('discovery rejects malformed authored operation, execution, and pricing fac
 	}
 });
 
-test('API dropdown labels headline pricing without reordering or comparing lanes', async () => {
+test('API dropdown quotes the published per-1k rate without reordering or comparing lanes', async () => {
 	const response = {
 		apis: [
 			apiFixture({
 				slug: 'flat.api',
 				name: 'Flat API',
-				pricing: { from: flatOffer, failoverMaxUsd: 0.5 },
+				pricing: { from: flatOffer, failoverMaxUsd: 0.5, failoverMaxPer1kUsd: 500 },
 				lanes: [{ ...apiFixture().lanes[0], pricing: linearOffer }],
 			}),
 			apiFixture({ slug: 'linear.api', name: 'Linear API' }),
@@ -242,11 +242,52 @@ test('API dropdown labels headline pricing without reordering or comparing lanes
 	assert.deepEqual(
 		options.map(({ name, value }) => ({ name, value })),
 		[
-			{ name: 'Flat API ($0.005/request)', value: 'flat.api' },
+			{ name: 'Flat API ($5.00/1k req)', value: 'flat.api' },
 			{
-				name: 'Linear API ($0.001/request + $0.0005/result, max $0.006)',
+				name: 'Linear API ($0.0005/result, max $6.00/1k req)',
 				value: 'linear.api',
 			},
 		],
 	);
+});
+
+test('per-1k rates are read from the wire, never scaled from the per-request figure', async () => {
+	const pricing = {
+		from: { model: 'flat', unit: 'request', maxUsd: 0.0966, maxPer1kUsd: 96.6 },
+		failoverMaxUsd: 0.0966,
+		failoverMaxPer1kUsd: 96.6,
+	};
+	const api = apiFixture({ slug: 'metered.api', name: 'Metered API', pricing, lanes: [] });
+
+	const { output } = await execute({ operation: 'list', filters: {} }, { apis: [api] });
+	const projected = output[0][0].json.pricing;
+	assert.notEqual(0.0966 * 1000, 96.6);
+	assert.equal(projected.from.maxPer1kUsd, 96.6);
+	assert.equal(projected.failoverMaxPer1kUsd, 96.6);
+	assert.equal(projected.from.maxUsd, 0.0966);
+
+	const node = new AnyApi();
+	const { ctx } = fakeContext({}, { apis: [api] });
+	const [option] = await node.methods.loadOptions.getSkus.call(ctx);
+	assert.equal(option.name, 'Metered API ($96.60/1k req)');
+});
+
+test('discovery rejects an offer or failover ceiling published without its per-1k rate', async () => {
+	for (const [override, message] of [
+		[
+			{ pricing: { from: { ...flatOffer, maxPer1kUsd: undefined }, failoverMaxUsd: 0.005, failoverMaxPer1kUsd: 5 } },
+			/pricing\.from\.maxPer1kUsd.*finite number/i,
+		],
+		[
+			{ pricing: { from: flatOffer, failoverMaxUsd: 0.005 } },
+			/pricing\.failoverMaxPer1kUsd.*finite number/i,
+		],
+	]) {
+		const { output } = await execute(
+			{ operation: 'list', filters: {} },
+			{ apis: [apiFixture(override)] },
+			{ continueOnFail: true },
+		);
+		assert.match(output[0][0].json.error, message);
+	}
 });

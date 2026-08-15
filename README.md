@@ -56,7 +56,7 @@ The credential is validated against the wallet balance endpoint when you save it
 
 1. Add the **AnyAPI** node to your workflow.
 2. Select **Run API**.
-3. Pick an API from the dropdown, for example **Google Search** or **Reddit Search**. Each option shows its live price (per request, per result, or both).
+3. Pick an API from the dropdown, for example **Google Search** or **Reddit Search**. Each option shows its live price quoted per 1,000 requests (`/1k req`), the denomination AnyAPI compares catalog prices in, plus any per-result rate. Billing itself stays per request: a completed run reports the exact `costUsd` of that one call.
 4. Provide the input. There are two **Input Mode** choices:
    - **Fields (from schema)** - the default. The node loads the selected API's input schema and renders native scalar and enum controls. Object, array, union, and null-capable inputs use structured JSON controls and preserve their JSON values. Invalid structured JSON fails before the paid request and directs you to Raw JSON mode.
    - **Raw JSON** - provide the raw payload, useful for expressions, for example:

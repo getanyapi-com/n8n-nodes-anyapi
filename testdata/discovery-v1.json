@@ -29,7 +29,8 @@
                 "maxUsd": 0.006,
                 "model": "linear",
                 "perUnitUsd": 0.0005,
-                "unit": "result"
+                "unit": "result",
+                "maxPer1kUsd": 6
               },
               "source": {
                 "artworkKey": "fox",
@@ -42,7 +43,8 @@
               "pricing": {
                 "maxUsd": 0.004,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 4
               },
               "source": {
                 "artworkKey": "atlas",
@@ -55,7 +57,8 @@
               "pricing": {
                 "maxUsd": 0.01,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 10
               },
               "source": {
                 "artworkKey": "owl",
@@ -75,8 +78,10 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
-            }
+              "unit": "result",
+              "maxPer1kUsd": 6
+            },
+            "failoverMaxPer1kUsd": 10
           },
           "provider": "AnyAPI",
           "slug": "linear.data",
@@ -96,7 +101,8 @@
               "pricing": {
                 "maxUsd": 0.005,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 5
               },
               "source": {
                 "artworkKey": "atlas",
@@ -114,8 +120,10 @@
             "from": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
-            }
+              "unit": "request",
+              "maxPer1kUsd": 5
+            },
+            "failoverMaxPer1kUsd": 5
           },
           "provider": "AnyAPI",
           "slug": "flat.data",
@@ -148,7 +156,8 @@
             "pricing": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
+              "unit": "request",
+              "maxPer1kUsd": 5
             },
             "source": {
               "artworkKey": "atlas",
@@ -181,8 +190,10 @@
           "from": {
             "maxUsd": 0.005,
             "model": "flat",
-            "unit": "request"
-          }
+            "unit": "request",
+            "maxPer1kUsd": 5
+          },
+          "failoverMaxPer1kUsd": 5
         },
         "provider": "AnyAPI",
         "slug": "flat.data",
@@ -225,7 +236,8 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
+              "unit": "result",
+              "maxPer1kUsd": 6
             },
             "source": {
               "artworkKey": "fox",
@@ -238,7 +250,8 @@
             "pricing": {
               "maxUsd": 0.004,
               "model": "flat",
-              "unit": "request"
+              "unit": "request",
+              "maxPer1kUsd": 4
             },
             "source": {
               "artworkKey": "atlas",
@@ -251,7 +264,8 @@
             "pricing": {
               "maxUsd": 0.01,
               "model": "flat",
-              "unit": "request"
+              "unit": "request",
+              "maxPer1kUsd": 10
             },
             "source": {
               "artworkKey": "owl",
@@ -293,8 +307,10 @@
             "maxUsd": 0.006,
             "model": "linear",
             "perUnitUsd": 0.0005,
-            "unit": "result"
-          }
+            "unit": "result",
+            "maxPer1kUsd": 6
+          },
+          "failoverMaxPer1kUsd": 10
         },
         "provider": "AnyAPI",
         "slug": "linear.data",
@@ -324,8 +340,10 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
-            }
+              "unit": "result",
+              "maxPer1kUsd": 6
+            },
+            "failoverMaxPer1kUsd": 10
           },
           "provider": "AnyAPI",
           "relevance": 1,
@@ -348,8 +366,10 @@
             "from": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
-            }
+              "unit": "request",
+              "maxPer1kUsd": 5
+            },
+            "failoverMaxPer1kUsd": 5
           },
           "provider": "AnyAPI",
           "relevance": 0.67,
@@ -381,8 +401,10 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
-            }
+              "unit": "result",
+              "maxPer1kUsd": 6
+            },
+            "failoverMaxPer1kUsd": 10
           },
           "provider": "AnyAPI",
           "slug": "linear.data"
@@ -402,8 +424,10 @@
             "from": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
-            }
+              "unit": "request",
+              "maxPer1kUsd": 5
+            },
+            "failoverMaxPer1kUsd": 5
           },
           "provider": "AnyAPI",
           "slug": "flat.data"
@@ -436,7 +460,8 @@
               "pricing": {
                 "maxUsd": 0.005,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 5
               },
               "source": {
                 "artworkKey": "atlas",
@@ -469,8 +494,10 @@
             "from": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
-            }
+              "unit": "request",
+              "maxPer1kUsd": 5
+            },
+            "failoverMaxPer1kUsd": 5
           },
           "provider": "AnyAPI",
           "slug": "flat.data",
@@ -515,7 +542,8 @@
                 "maxUsd": 0.006,
                 "model": "linear",
                 "perUnitUsd": 0.0005,
-                "unit": "result"
+                "unit": "result",
+                "maxPer1kUsd": 6
               },
               "source": {
                 "artworkKey": "fox",
@@ -528,7 +556,8 @@
               "pricing": {
                 "maxUsd": 0.004,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 4
               },
               "source": {
                 "artworkKey": "atlas",
@@ -541,7 +570,8 @@
               "pricing": {
                 "maxUsd": 0.01,
                 "model": "flat",
-                "unit": "request"
+                "unit": "request",
+                "maxPer1kUsd": 10
               },
               "source": {
                 "artworkKey": "owl",
@@ -583,8 +613,10 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
-            }
+              "unit": "result",
+              "maxPer1kUsd": 6
+            },
+            "failoverMaxPer1kUsd": 10
           },
           "provider": "AnyAPI",
           "slug": "linear.data",
@@ -616,8 +648,10 @@
               "maxUsd": 0.006,
               "model": "linear",
               "perUnitUsd": 0.0005,
-              "unit": "result"
-            }
+              "unit": "result",
+              "maxPer1kUsd": 6
+            },
+            "failoverMaxPer1kUsd": 10
           },
           "provider": "AnyAPI",
           "relevance": 1,
@@ -639,8 +673,10 @@
             "from": {
               "maxUsd": 0.005,
               "model": "flat",
-              "unit": "request"
-            }
+              "unit": "request",
+              "maxPer1kUsd": 5
+            },
+            "failoverMaxPer1kUsd": 5
           },
           "provider": "AnyAPI",
           "relevance": 0.67,

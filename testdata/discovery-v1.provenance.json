@@ -1,6 +1,6 @@
 {
   "sourceRepository": "getanyapi-com/anyapi",
-  "sourceCommit": "4cb2215c1159f990d7a2878ca0674b565a2a7bb7",
+  "sourceCommit": "4a08ba36a2f80368b667ea62fbd0f693a24f5e88",
   "sourcePath": "testdata/discovery-v1.json",
-  "sha256": "2ae863ea488d3066cd9a385a306d1ecfa0899b2de0dfdd98f295a8dcdffe6310"
+  "sha256": "6ad78f2cfb6aef1f3461602517b93767185319f61860d8e3eb788232b1b0a062"
 }

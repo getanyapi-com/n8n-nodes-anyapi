@@ -20,20 +20,32 @@ type DiscoveryExchange<T> = {
 	read: (value: unknown) => T;
 };
 
+/** The unit every catalog price the node shows a human is quoted in. */
+const REQUEST_RATE_LABEL = '/1k req';
+
 function fmtUsd(value: number): string {
 	if (value >= 1) return `$${value.toFixed(2)}`;
 	return `$${value.toFixed(8).replace(/0+$/, '').replace(/\.$/, '')}`;
 }
 
+/**
+ * Catalog prices are quoted per 1,000 requests, the denomination AnyAPI shows
+ * customers everywhere, because most of the catalog costs a fraction of a cent
+ * per call and per-request figures cannot be compared by eye. The rate is the
+ * offer's published `maxPer1kUsd`, never `maxUsd` scaled here. A per-unit rate
+ * is charged per billable item rather than per request, so it keeps its own
+ * denomination; a linear offer's per-request base has no published per-1k twin
+ * and is left to the offer itself rather than quoted in a second denomination
+ * beside the comparable rate.
+ */
 function priceLabel(value: unknown): string {
 	const pricing = pricingAt(value, 'catalog.pricing');
 	const offer = pricing.from as unknown as PricingOffer;
-	if (offer.model === 'flat') return ` (${fmtUsd(offer.maxUsd)}/${offer.unit})`;
-	const parts: string[] = [];
-	if ((offer.baseUsd ?? 0) > 0) parts.push(`${fmtUsd(offer.baseUsd ?? 0)}/request`);
-	if ((offer.perUnitUsd ?? 0) > 0) parts.push(`${fmtUsd(offer.perUnitUsd ?? 0)}/${offer.unit}`);
-	parts.push(`max ${fmtUsd(offer.maxUsd)}`);
-	return ` (${parts.join(' + ').replace(' + max ', ', max ')})`;
+	const rate = `${fmtUsd(offer.maxPer1kUsd)}${REQUEST_RATE_LABEL}`;
+	if (offer.model === 'flat') return ` (${rate})`;
+	const perUnit = offer.perUnitUsd ?? 0;
+	if (perUnit <= 0) return ` (${rate})`;
+	return ` (${fmtUsd(perUnit)}/${offer.unit}, max ${rate})`;
 }
 
 function browseRequest(baseUrl: string, category: unknown): DiscoveryRequest {
