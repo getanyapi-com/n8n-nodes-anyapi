@@ -25,7 +25,7 @@ The node exposes one **AnyAPI** node with seven operations:
 - **Run API** - execute any API by SKU. Inputs render as typed fields loaded from the API schema (or raw JSON if you prefer). Returns `output`, `provider`, `costUsd`, and `items`.
 - **Get API Schema** - fetch the input and output JSON Schema for one API.
 - **List APIs** - browse the AnyAPI catalog, optionally filtered by category.
-- **Search APIs** - run a ranked catalog query, optionally scoped by category or platform.
+- **Search APIs** - run a ranked catalog query, optionally scoped by category or platform. The query is optional when a Category or Platform filter scopes the search, so you can list every API on one platform.
 - **Get Balance** - return the remaining wallet balance in USD.
 - **Get Request** - retrieve the current stored state of a durable Request without repeating its paid API call.
 - **Wait for Request** - poll a durable Request until it reaches a terminal state, then return its retained result.

@@ -72,6 +72,43 @@ test('browse accepts an empty authoritative lane plan and absent optional boolea
 	assert.deepEqual(output[0][0].json, api);
 });
 
+test('ranked search scopes on a filter alone and omits q rather than sending it empty', async () => {
+	const response = { results: [searchFixture()], total: 1, ranking: 'semantic' };
+
+	const scoped = await execute(
+		{ operation: 'search', query: '', searchFilters: { platform: 'reddit' } },
+		response,
+	);
+	assert.equal(scoped.requests[0].url, 'https://api.example.test/catalog/search');
+	assert.deepEqual(scoped.requests[0].qs, { platform: 'reddit' });
+
+	const byCategory = await execute(
+		{ operation: 'search', query: '', searchFilters: { category: 'social', limit: 5 } },
+		response,
+	);
+	assert.deepEqual(byCategory.requests[0].qs, { category: 'social', limit: 5 });
+
+	// A saved workflow that filled the Query field keeps sending exactly what it sent before.
+	const withQuery = await execute(
+		{ operation: 'search', query: 'web', searchFilters: { platform: 'reddit' } },
+		response,
+	);
+	assert.deepEqual(withQuery.requests[0].qs, { q: 'web', platform: 'reddit' });
+});
+
+test('ranked search naming no query, category, or platform never reaches the gateway', async () => {
+	const { ctx, requests } = fakeContext(
+		{ operation: 'search', query: '', searchFilters: {} },
+		{ results: [] },
+	);
+	const node = new AnyApi();
+	await assert.rejects(
+		() => node.execute.call(ctx),
+		/Search needs a Query, or a Category or Platform filter to scope it\./,
+	);
+	assert.equal(requests.length, 0);
+});
+
 test('ranked search remains rolling-safe when additive booleans and try limits are absent', async () => {
 	const result = searchFixture();
 	delete result.failover;

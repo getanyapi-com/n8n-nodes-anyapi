@@ -165,8 +165,14 @@ async function discoveryOperation(
 			await context.helpers.httpRequestWithAuthentication.call(context, 'anyApiApi', discovery.request),
 		);
 	}
-	const query = context.getNodeParameter('query', item) as string;
+	const query = context.getNodeParameter('query', item, '') as string;
 	const filters = context.getNodeParameter('searchFilters', item, {}) as IDataObject;
+	if (query === '' && !filters.category && !filters.platform) {
+		throw new NodeOperationError(
+			context.getNode(),
+			'Search needs a Query, or a Category or Platform filter to scope it.',
+		);
+	}
 	const discovery = customerSafeDiscovery.search(baseUrl, query, filters);
 	return discovery.read(
 		await context.helpers.httpRequestWithAuthentication.call(context, 'anyApiApi', discovery.request),
