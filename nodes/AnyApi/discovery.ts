@@ -54,8 +54,16 @@ function browseRequest(baseUrl: string, category: unknown): DiscoveryRequest {
 	return { method: 'GET', url: `${baseUrl}/v1/apis`, qs, json: true };
 }
 
-function searchRequest(baseUrl: string, query: string, filters: IDataObject): DiscoveryRequest {
-	const qs: IDataObject = { q: query };
+/**
+ * Ranked search accepts any non-empty combination of `q`, `category` and
+ * `platform`, so a scope with no query is a legitimate request. An absent query
+ * is omitted rather than sent empty, matching how `browseRequest` treats an
+ * absent category; the gateway reads an empty `q` as absent, so a saved
+ * workflow that never filled the Query field keeps the results it had.
+ */
+function searchRequest(baseUrl: string, query: unknown, filters: IDataObject): DiscoveryRequest {
+	const qs: IDataObject = {};
+	if (typeof query === 'string' && query !== '') qs.q = query;
 	if (filters.category) qs.category = filters.category;
 	if (filters.platform) qs.platform = filters.platform;
 	if (filters.limit) qs.limit = filters.limit;
@@ -80,7 +88,7 @@ export const customerSafeDiscovery = {
 		};
 	},
 	priceLabel,
-	search(baseUrl: string, query: string, filters: IDataObject): DiscoveryExchange<IDataObject> {
+	search(baseUrl: string, query: unknown, filters: IDataObject): DiscoveryExchange<IDataObject> {
 		return { request: searchRequest(baseUrl, query, filters), read: searchResponse };
 	},
 };

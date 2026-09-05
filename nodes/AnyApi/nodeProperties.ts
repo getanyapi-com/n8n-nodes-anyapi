@@ -185,8 +185,8 @@ export const nodeProperties: INodeProperties[] = [
 			name: 'query',
 			type: 'string',
 			default: '',
-			required: true,
-			description: 'Words or intent to rank against API names and descriptions',
+			description:
+				'Words or intent to rank against API names and descriptions. Leave empty to list everything a Category or Platform filter scopes to.',
 			displayOptions: { show: { operation: ['search'] } },
 		},
 		{
