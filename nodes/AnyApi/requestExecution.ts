@@ -210,6 +210,20 @@ async function executeOperation(
 	throw new NodeOperationError(context.getNode(), `Unsupported AnyAPI operation: ${operation}`);
 }
 
+// rateLimitedMessage explains the 429 rate_limited the gateway returns once the
+// account has started its limit of new requests to this API in the current UTC
+// minute. Nothing was run or charged, so the item can be run again after the wait.
+// httpRequestWithAuthentication hands over a NodeApiError that keeps the status
+// (httpCode) and the JSON body (context.data) but not the response headers, so
+// the wait is described as the rest of the minute, which is what Retry-After counts.
+function rateLimitedMessage(error: unknown): string | undefined {
+	const failure = error as { httpCode?: unknown; context?: { data?: IDataObject } } | null;
+	if (String(failure?.httpCode) !== '429' || failure?.context?.data?.code !== 'rate_limited') {
+		return undefined;
+	}
+	return 'This account has reached its limit of new requests a minute to this API. Nothing was run or charged. Wait until the next minute starts, then run it again.';
+}
+
 export async function executeAnyApi(
 	this: IExecuteFunctions,
 ): Promise<INodeExecutionData[][]> {
@@ -225,9 +239,20 @@ export async function executeAnyApi(
 				returnData.push({ json: entry, pairedItem: { item } });
 			}
 		} catch (error) {
+			const limited = rateLimitedMessage(error);
 			if (this.continueOnFail()) {
-				returnData.push({ json: { error: (error as Error).message }, pairedItem: { item } });
+				returnData.push({ json: { error: limited ?? (error as Error).message }, pairedItem: { item } });
 				continue;
+			}
+			if (limited) {
+				// A NodeApiError passed to NodeApiError comes back unchanged, options
+				// ignored, so the message is set on the error that is thrown.
+				const limitedError = new NodeApiError(this.getNode(), error as JsonObject, {
+					itemIndex: item,
+					message: limited,
+				});
+				limitedError.message = limited;
+				throw limitedError;
 			}
 			throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: item });
 		}

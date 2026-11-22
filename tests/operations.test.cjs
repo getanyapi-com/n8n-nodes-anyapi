@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
+const { NodeApiError } = require('n8n-workflow');
+
 const {
 	AnyApi,
 	apiFixture,
@@ -223,4 +225,32 @@ test('unknown operations fail before outbound transport instead of reading balan
 	);
 	assert.equal(requests.length, 0);
 	assert.match(output[0][0].json.error, /unsupported anyapi operation/i);
+});
+
+// httpRequestWithAuthentication rethrows an HTTP failure as a NodeApiError built
+// from the axios error, keeping its status and body but not its headers.
+function rateLimitedResponse() {
+	const error = new Error('Request failed with status code 429');
+	error.response = {
+		status: 429,
+		headers: { 'retry-after': '37' },
+		data: { error: 'limit reached', code: 'rate_limited' },
+	};
+	throw new NodeApiError({ name: 'AnyAPI', type: 'anyApi' }, error);
+}
+
+const rateLimitedText =
+	'This account has reached its limit of new requests a minute to this API. Nothing was run or charged. Wait until the next minute starts, then run it again.';
+
+test('Run API reports how long to wait on 429 rate_limited', async () => {
+	await assert.rejects(
+		execute({ operation: 'run', sku: 'linear.data', inputMode: 'json', input: '{}' }, rateLimitedResponse),
+		(error) => error.message === rateLimitedText && error.httpCode === '429',
+	);
+	const { output } = await execute(
+		{ operation: 'run', sku: 'linear.data', inputMode: 'json', input: '{}' },
+		rateLimitedResponse,
+		{ continueOnFail: true },
+	);
+	assert.equal(output[0][0].json.error, rateLimitedText);
 });
