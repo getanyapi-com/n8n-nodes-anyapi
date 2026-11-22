@@ -82,6 +82,24 @@ async function requestSnapshot(
 	})) as IDataObject;
 }
 
+// pollRequest reads an accepted Request. A 429 rate_limited here means it is
+// still running and was read too soon, so the pending snapshot stands and the
+// wait loop reads the same id again; a new run could be charged twice.
+async function pollRequest(
+	context: IExecuteFunctions,
+	baseUrl: string,
+	pending: IDataObject,
+): Promise<IDataObject> {
+	try {
+		return await requestSnapshot(context, baseUrl, String(pending.requestId));
+	} catch (error) {
+		if (rateLimitedMessage(error) === undefined) {
+			throw new NodeApiError(context.getNode(), error as JsonObject);
+		}
+		return pending;
+	}
+}
+
 async function waitForRequest(
 	context: IExecuteFunctions,
 	baseUrl: string,
@@ -98,7 +116,7 @@ async function waitForRequest(
 		}
 		const delaySeconds = Math.max(1, Number(snapshot.retryAfterSeconds ?? 2));
 		await sleep(delaySeconds * 1000);
-		snapshot = await requestSnapshot(context, baseUrl, String(snapshot.requestId));
+		snapshot = await pollRequest(context, baseUrl, snapshot);
 	}
 	return completedRequestResult(snapshot, context.getNode());
 }
@@ -190,11 +208,8 @@ async function executeOperation(
 		return requestSnapshot(context, baseUrl, context.getNodeParameter('requestId', item) as string);
 	}
 	if (operation === 'waitRequest') {
-		const snapshot = await requestSnapshot(
-			context,
-			baseUrl,
-			context.getNodeParameter('requestId', item) as string,
-		);
+		const requestId = context.getNodeParameter('requestId', item) as string;
+		const snapshot = await pollRequest(context, baseUrl, { requestId, status: 'queued' });
 		return waitForRequest(context, baseUrl, snapshot);
 	}
 	if (operation === 'getSchema' || operation === 'list' || operation === 'search') {
@@ -210,18 +225,17 @@ async function executeOperation(
 	throw new NodeOperationError(context.getNode(), `Unsupported AnyAPI operation: ${operation}`);
 }
 
-// rateLimitedMessage explains the 429 rate_limited the gateway returns once the
-// account has started its limit of new requests to this API in the current UTC
-// minute. Nothing was run or charged, so the item can be run again after the wait.
-// httpRequestWithAuthentication hands over a NodeApiError that keeps the status
-// (httpCode) and the JSON body (context.data) but not the response headers, so
-// the wait is described as the rest of the minute, which is what Retry-After counts.
+// rateLimitedMessage is the gateway's own message on a 429 rate_limited, which
+// already says what happened and how long to wait: on starting a run, that the
+// limit was reached or the requests could not be counted, so nothing ran; on
+// reading a Request, that it is still running. httpRequestWithAuthentication
+// hands over a NodeApiError that keeps the status (httpCode) and the JSON body
+// (context.data), whose generic 429 message would otherwise replace it.
 function rateLimitedMessage(error: unknown): string | undefined {
 	const failure = error as { httpCode?: unknown; context?: { data?: IDataObject } } | null;
-	if (String(failure?.httpCode) !== '429' || failure?.context?.data?.code !== 'rate_limited') {
-		return undefined;
-	}
-	return 'This account has reached its limit of new requests a minute to this API. Nothing was run or charged. Wait until the next minute starts, then run it again.';
+	const data = failure?.context?.data;
+	if (String(failure?.httpCode) !== '429' || data?.code !== 'rate_limited') return undefined;
+	return String(data.error);
 }
 
 export async function executeAnyApi(

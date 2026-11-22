@@ -229,28 +229,46 @@ test('unknown operations fail before outbound transport instead of reading balan
 
 // httpRequestWithAuthentication rethrows an HTTP failure as a NodeApiError built
 // from the axios error, keeping its status and body but not its headers.
-function rateLimitedResponse() {
+function rateLimitedError(message) {
 	const error = new Error('Request failed with status code 429');
 	error.response = {
 		status: 429,
 		headers: { 'retry-after': '37' },
-		data: { error: 'limit reached', code: 'rate_limited' },
+		data: { error: message, code: 'rate_limited' },
 	};
-	throw new NodeApiError({ name: 'AnyAPI', type: 'anyApi' }, error);
+	return new NodeApiError({ name: 'AnyAPI', type: 'anyApi' }, error);
 }
 
-const rateLimitedText =
-	'This account has reached its limit of new requests a minute to this API. Nothing was run or charged. Wait until the next minute starts, then run it again.';
+const runLimitedText =
+	"this account's requests to this API could not be counted just now, so nothing was run or charged; retry in 37 seconds";
 
-test('Run API reports how long to wait on 429 rate_limited', async () => {
+test('Run API shows the gateway message on 429 rate_limited', async () => {
+	const refuse = () => {
+		throw rateLimitedError(runLimitedText);
+	};
+	const parameters = { operation: 'run', sku: 'linear.data', inputMode: 'json', input: '{}' };
 	await assert.rejects(
-		execute({ operation: 'run', sku: 'linear.data', inputMode: 'json', input: '{}' }, rateLimitedResponse),
-		(error) => error.message === rateLimitedText && error.httpCode === '429',
+		execute(parameters, refuse),
+		(error) => error.message === runLimitedText && error.httpCode === '429',
 	);
-	const { output } = await execute(
-		{ operation: 'run', sku: 'linear.data', inputMode: 'json', input: '{}' },
-		rateLimitedResponse,
-		{ continueOnFail: true },
+	const { output } = await execute(parameters, refuse, { continueOnFail: true });
+	assert.equal(output[0][0].json.error, runLimitedText);
+});
+
+test('Wait for Request reads the same id again after a 429 rate_limited', async () => {
+	const answers = [
+		() => {
+			throw rateLimitedError('this request is still running; read it again after Retry-After seconds');
+		},
+		() => ({ requestId: 'req_123', status: 'succeeded', result: terminal }),
+	];
+	const { output, requests } = await execute(
+		{ operation: 'waitRequest', requestId: 'req_123' },
+		() => answers.shift()(),
 	);
-	assert.equal(output[0][0].json.error, rateLimitedText);
+	assert.deepEqual(output[0][0].json, terminal);
+	assert.deepEqual(
+		requests.map((request) => `${request.method} ${request.url}`),
+		['GET https://api.example.test/v1/requests/req_123', 'GET https://api.example.test/v1/requests/req_123'],
+	);
 });
