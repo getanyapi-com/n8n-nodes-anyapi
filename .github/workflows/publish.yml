@@ -2,26 +2,42 @@ name: Publish to npm
 
 # Publishes the package with an npm provenance attestation when a version tag
 # (e.g. v0.1.1) is pushed. n8n requires verified community nodes to be published
-# from CI with provenance.
+# from CI with provenance. Publishing uses npm trusted publishing (OIDC, no token):
+# the trusted publisher on npmjs.com is getanyapi-com/n8n-nodes-anyapi, workflow
+# publish.yml, no environment.
+#
+# To republish an existing tag (e.g. after a failed run):
+#   gh workflow run publish.yml -R getanyapi-com/n8n-nodes-anyapi --ref main -f tag=v0.4.1
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The version tag to publish (e.g. v0.4.1). Must already exist."
+        required: true
+        type: string
 
 permissions:
   contents: read
-  id-token: write # required for npm provenance
+  id-token: write # npm trusted publishing (OIDC) and provenance
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      # npm trusted publishing needs Node >= 22.14.0 and npm CLI >= 11.5.1.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+      - name: upgrade npm CLI for trusted publishing
+        run: npm install -g npm@latest
       # --ignore-scripts skips native addon builds (a transitive isolated-vm dep
       # of n8n-workflow that fails to compile on the runner). We only need the
       # TypeScript types and the lint/build toolchain, not that native module.
@@ -37,5 +53,3 @@ jobs:
       - name: Live discovery compatibility canary
         run: npm run canary:live
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
