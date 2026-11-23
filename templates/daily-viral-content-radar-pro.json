@@ -250,7 +250,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"query\": \"{{ $json.orQuery }} since:{{ $now.minus({ days: 7 }).toISODate() }}\", \"limit\": 15, \"queryType\": \"Top\" }",
+        "jsonBody": "={ \"query\": \"{{ $json.orQuery }} since:{{ $now.minus({ days: 7 }).toISODate() }}\", \"queryType\": \"Top\" }",
         "options": {}
       },
       "id": "3cb9792a-937e-467a-b441-c77c56ba4c38",
